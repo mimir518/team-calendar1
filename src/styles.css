@@ -1,0 +1,202 @@
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --line: #e2e8f0;
+  --text: #1e293b;
+  --muted: #64748b;
+  --primary: #0284c7;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; }
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+
+.app-shell { min-height: 100vh; }
+.app-wrap { max-width: 1280px; margin: 0 auto; padding: 20px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  padding: 20px;
+}
+.hero-card, .row, .between, .wrap { display: flex; }
+.hero-card, .between { justify-content: space-between; }
+.wrap { flex-wrap: wrap; }
+.row { align-items: center; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.align-center { align-items: center; }
+.top-gap { margin-top: 12px; }
+.section-card, .hero-card { margin-bottom: 24px; }
+.main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 24px;
+}
+.side-stack { display: flex; flex-direction: column; gap: 24px; }
+.hero-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+.stat-box, .summary-card {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 16px;
+  min-width: 110px;
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.summary-value, .stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+.stat-label { color: var(--muted); font-size: 12px; }
+.eyebrow { color: #0369a1; font-size: 14px; font-weight: 600; }
+h1 { margin: 6px 0 0; font-size: 32px; }
+h2 { margin: 0; font-size: 22px; }
+.subtle, .mini-tip, .daytype-text, .notes { color: var(--muted); }
+.subtle { margin: 10px 0 0; line-height: 1.5; }
+.mini-tip { font-size: 12px; }
+.ai-box {
+  background: #f0f9ff;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.text-input, .select-input {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.text-input { flex: 1; min-width: 240px; }
+.primary-btn, .ghost-btn {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-weight: 600;
+}
+.primary-btn { background: #0284c7; color: #fff; }
+.primary-btn:hover { background: #0369a1; }
+.ghost-btn {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.feedback { margin-top: 12px; color: #0369a1; font-size: 14px; }
+.pill, .member-pill, .today-tag, .status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pill { background: #f8fafc; }
+.pill-workday { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.pill-weekend { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }
+.pill-holiday { background: #ffe4e6; color: #be123c; border-color: #fecdd3; }
+.member-pill { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+.section-head { margin-bottom: 16px; }
+.weekday-grid, .calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+.weekday-grid {
+  margin-bottom: 12px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.weekday-grid > div { padding: 4px 0; }
+.calendar-empty { aspect-ratio: 1 / 1; }
+.calendar-cell {
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  padding: 10px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.15s ease;
+}
+.calendar-cell:hover { transform: translateY(-1px); }
+.calendar-weekend { background: #f1f5f9; }
+.calendar-holiday { background: #fff1f2; }
+.calendar-selected { outline: 2px solid #0ea5e9; }
+.calendar-today { background: #fef3c7; }
+.cell-top { display: flex; justify-content: space-between; }
+.date-number { font-size: 15px; font-weight: 700; }
+.today-tag { background: #fde68a; color: #92400e; border-color: #fcd34d; padding: 2px 8px; font-size: 10px; }
+.cell-bottom { display: flex; flex-direction: column; gap: 6px; }
+.daytype-text { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-badge { width: fit-content; max-width: 100%; }
+.status-office { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.status-ho { background: #eff6ff; color: #0369a1; border-color: #bfdbfe; }
+.status-ho-dark { background: #dbeafe; color: #075985; border-color: #93c5fd; }
+.status-off { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.status-off-dark { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }
+.status-business { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+.editor-stack { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+.member-card {
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  border-radius: 18px;
+  padding: 14px;
+}
+.member-card-active {
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+}
+.member-name {
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.member-name-active { color: #0369a1; }
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.status-option {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status-option-active { outline: 2px solid #0ea5e9; }
+.notes { font-size: 14px; line-height: 1.7; }
+
+@media (max-width: 960px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .app-wrap { padding: 14px; }
+  .card { padding: 16px; border-radius: 20px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 18px; }
+  .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-cell { padding: 8px; border-radius: 14px; }
+  .status-badge { font-size: 10px; padding: 4px 8px; }
+  .status-grid { grid-template-columns: 1fr 1fr; }
+}
