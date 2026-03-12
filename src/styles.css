@@ -20,8 +20,10 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter,
 .hero-card, .row, .between, .wrap { display: flex; }
 .hero-card {
   justify-content: space-between;
-  align-items: stretch;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  padding-bottom: 14px;
 }
 .between { justify-content: space-between; }
 .wrap { flex-wrap: wrap; }
@@ -33,18 +35,31 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter,
 .section-card, .hero-card { margin-bottom: 24px; }
 .hero-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  grid-template-columns: minmax(110px, 1fr);
   gap: 10px;
   align-content: center;
 }
+.hero-title-wrap { display: flex; align-items: center; min-height: 100%; }
+
 .stat-box {
   background: #fbfbfa;
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 10px 14px;
   min-width: 110px;
+  cursor: pointer;
+  text-align: left;
 }
-.stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+.stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+.year-select {
+  width: 100%;
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 16px;
+  background: #fff;
+}
 .stat-label { color: var(--muted); font-size: 12px; }
 h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
 h2 { margin: 0; font-size: 22px; }
@@ -90,12 +105,12 @@ h2 { margin: 0; font-size: 22px; }
 }
 .pill { background: #f8fafc; }
 .section-head { margin-bottom: 16px; }
-.status-office { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-.status-ho { background: #eff6ff; color: #0369a1; border-color: #bfdbfe; }
-.status-ho-dark { background: #dbeafe; color: #075985; border-color: #93c5fd; }
-.status-off { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
-.status-off-dark { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }
-.status-business { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+.status-office { background: #cadbbb; color: #334155; border-color: #b6cba1; }
+.status-ho { background: #f6efff; color: #5b21b6; border-color: #e9d5ff; }
+.status-ho-dark { background: #f6efff; color: #5b21b6; border-color: #e9d5ff; }
+.status-off { background: #fce2e3; color: #7f1d1d; border-color: #fbcfe8; }
+.status-off-dark { background: #fce2e3; color: #7f1d1d; border-color: #fbcfe8; }
+.status-business { background: #ffc699; color: #7c2d12; border-color: #fdba74; }
 .weekly-card { width: 100%; }
 .week-table-wrap { width: 100%; overflow-x: auto; }
 .week-nav-cards {
@@ -133,6 +148,7 @@ h2 { margin: 0; font-size: 22px; }
   border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
+  background: #e4ebf1;
 }
 .week-table th,
 .week-table td {
@@ -140,7 +156,7 @@ h2 { margin: 0; font-size: 22px; }
   border-bottom: 1px solid var(--line);
   padding: 10px;
   text-align: center;
-  background: #fff;
+  background: #e4ebf1;
 }
 .week-table tr:last-child td,
 .week-table tr:last-child th { border-bottom: none; }
@@ -149,16 +165,22 @@ h2 { margin: 0; font-size: 22px; }
 .week-table thead th {
   font-size: 13px;
   font-weight: 700;
-  background: #f8fafc;
+  background: #e4ebf1;
 }
 .week-table thead th:first-child { width: 140px; }
-.member-col { background: #f8fafc !important; }
+.member-col { background: #e4ebf1 !important; }
 .table-date { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 .table-daytype { font-size: 11px; margin-top: 2px; }
-.table-weekend { background: #f1f5f9 !important; }
-.table-holiday { background: #fff1f2 !important; }
+.table-weekend-off { background: #fce2e3 !important; }
 .table-today-col {
-  box-shadow: inset 0 0 0 2px #38bdf8;
+  border-left: 2px solid #f8e8b4 !important;
+  border-right: 2px solid #f8e8b4 !important;
+}
+.table-today-start {
+  border-top: 2px solid #f8e8b4 !important;
+}
+.table-today-end {
+  border-bottom: 2px solid #f8e8b4 !important;
 }
 .table-status {
   width: 100%;
