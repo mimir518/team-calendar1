@@ -99,8 +99,105 @@ function buildMonth(year, monthIndex) {
   return days
 }
 
-function normalizeChineseDate(month, day) {
-  return `2026-${pad(Number(month))}-${pad(Number(day))}`
+function normalizeChineseDate(month, day, year = 2026) {
+  return `${year}-${pad(Number(month))}-${pad(Number(day))}`
+}
+
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function getQuarterDateRange(quarter, year = 2026) {
+  const quarterMap = {
+    1: { startDateStr: `${year}-01-01`, endDateStr: `${year}-03-31` },
+    2: { startDateStr: `${year}-04-01`, endDateStr: `${year}-06-30` },
+    3: { startDateStr: `${year}-07-01`, endDateStr: `${year}-09-30` },
+    4: { startDateStr: `${year}-10-01`, endDateStr: `${year}-12-31` },
+  }
+  return quarterMap[quarter]
+}
+
+function parseStatusFromText(text) {
+  if (/HO半天上午/i.test(text) || text.includes('HO上午')) return 'ho-am'
+  if (/HO半天下午/i.test(text) || text.includes('HO下午')) return 'ho-pm'
+  if (text.includes('休假半天上午') || text.includes('休假上午')) return 'off-am'
+  if (text.includes('休假半天下午') || text.includes('休假下午')) return 'off-pm'
+  if (text.includes('休假')) return 'off'
+  if (/\bHO\b/i.test(text) || text.includes('居家')) return 'ho'
+  if (text.includes('出差')) return 'business'
+  if (text.includes('在公司') || text.includes('到公司') || text.includes('办公室')) return 'office'
+  return null
+}
+
+function extractMembersFromText(text) {
+  const matched = members.filter((name) => new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(text))
+  return [...new Set(matched)]
+}
+
+function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
+  const fullRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})月(\d{1,2})号?/)
+  if (fullRangeMatch) {
+    const [, startMonth, startDay, endMonth, endDay] = fullRangeMatch
+    return {
+      temporalRule: {
+        type: 'date-range',
+        startDateStr: normalizeChineseDate(startMonth, startDay, defaultYear),
+        endDateStr: normalizeChineseDate(endMonth, endDay, defaultYear),
+      },
+      summary: `从 ${Number(startMonth)}月${Number(startDay)}日 到 ${Number(endMonth)}月${Number(endDay)}日`,
+    }
+  }
+
+  const sameMonthRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})号?/)
+  if (sameMonthRangeMatch) {
+    const [, month, startDay, endDay] = sameMonthRangeMatch
+    return {
+      temporalRule: {
+        type: 'date-range',
+        startDateStr: normalizeChineseDate(month, startDay, defaultYear),
+        endDateStr: normalizeChineseDate(month, endDay, defaultYear),
+      },
+      summary: `从 ${Number(month)}月${Number(startDay)}日 到 ${Number(month)}月${Number(endDay)}日`,
+    }
+  }
+
+  const singleMatch = text.match(/(\d{1,2})月(\d{1,2})号?/)
+  if (singleMatch) {
+    const [, month, day] = singleMatch
+    return {
+      temporalRule: {
+        type: 'date-range',
+        startDateStr: normalizeChineseDate(month, day, defaultYear),
+        endDateStr: normalizeChineseDate(month, day, defaultYear),
+      },
+      summary: `${Number(month)}月${Number(day)}日`,
+    }
+  }
+
+  const quarterMatch = text.match(/第?([一二三四1234])季度/)
+  const quarterToken = quarterMatch?.[1] || fallbackQuarter
+  const quarterValueMap = { 一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4 }
+  const quarter = quarterToken ? quarterValueMap[quarterToken] : null
+
+  const weekdayMatch = text.match(/每周([一二三四五六日天])/)
+  if (weekdayMatch) {
+    const weekdayMap = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
+    const weekday = weekdayMap[weekdayMatch[1]]
+    const range = quarter ? getQuarterDateRange(quarter, defaultYear) : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
+
+    return {
+      temporalRule: {
+        type: 'weekly',
+        weekday,
+        ...range,
+        quarter,
+      },
+      summary: `${quarter ? `第${quarter}季度` : '全年'}每周${weekdayMatch[1]}`,
+    }
+  }
+
+  return null
 }
 
 function collapseStatusForSummary(status) {
@@ -109,71 +206,48 @@ function collapseStatusForSummary(status) {
   return status
 }
 
-function parseAiCommand(input) {
+function parseAiCommand(input, defaultYear = 2026) {
   const text = input.trim()
   if (!text) return { ok: false, message: '请输入一句指令。' }
 
-  const member = members.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(text))
-  if (!member) {
-    return { ok: false, message: '没有识别到组员名称，请输入 Doris、Mary、Mark、Jerry 或 Helen。' }
-  }
+  const quarterMatch = text.match(/第?([一二三四1234])季度/)
+  const fallbackQuarter = quarterMatch?.[1]
+  const memberPattern = members.map(escapeRegExp).join('|')
+  const clauses = text
+    .split(/[，;。&]+/)
+    .flatMap((segment) => segment.split(new RegExp(`\\s+(?=(?:${memberPattern})\\b)`, 'i')))
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const actions = []
 
-  let status = null
-  if (/HO半天上午/i.test(text) || text.includes('HO上午')) status = 'ho-am'
-  else if (/HO半天下午/i.test(text) || text.includes('HO下午')) status = 'ho-pm'
-  else if (text.includes('休假半天上午') || text.includes('休假上午')) status = 'off-am'
-  else if (text.includes('休假半天下午') || text.includes('休假下午')) status = 'off-pm'
-  else if (text.includes('休假')) status = 'off'
-  else if (/\bHO\b/i.test(text) || text.includes('居家')) status = 'ho'
-  else if (text.includes('出差')) status = 'business'
-  else if (text.includes('在公司') || text.includes('到公司') || text.includes('办公室')) status = 'office'
+  for (const clause of clauses) {
+    const membersInClause = extractMembersFromText(clause.replace(/(和|、|,|and)/gi, ' '))
+    if (!membersInClause.length) continue
 
-  if (!status) {
-    return { ok: false, message: '没有识别到状态，请使用 在公司 / HO / 休假 / 出差。' }
-  }
-
-  const fullRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})月(\d{1,2})号?/)
-  if (fullRangeMatch) {
-    const [, startMonth, startDay, endMonth, endDay] = fullRangeMatch
-    return {
-      ok: true,
-      member,
-      status,
-      startDateStr: normalizeChineseDate(startMonth, startDay),
-      endDateStr: normalizeChineseDate(endMonth, endDay),
-      summary: `${member} 从 ${Number(startMonth)}月${Number(startDay)}日 到 ${Number(endMonth)}月${Number(endDay)}日改为${statusMap[status].label}`,
+    const status = parseStatusFromText(clause)
+    if (!status) {
+      return { ok: false, message: `子句“${clause}”没有识别到状态，请使用 在公司 / HO / 休假 / 出差。` }
     }
-  }
 
-  const sameMonthRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})号?/)
-  if (sameMonthRangeMatch) {
-    const [, month, startDay, endDay] = sameMonthRangeMatch
-    return {
-      ok: true,
-      member,
-      status,
-      startDateStr: normalizeChineseDate(month, startDay),
-      endDateStr: normalizeChineseDate(month, endDay),
-      summary: `${member} 从 ${Number(month)}月${Number(startDay)}日 到 ${Number(month)}月${Number(endDay)}日改为${statusMap[status].label}`,
+    const temporalResult = parseTemporalRuleFromText(clause, fallbackQuarter, defaultYear)
+    if (!temporalResult) {
+      return { ok: false, message: `子句“${clause}”没有识别到时间，请补充日期或“每周几”。` }
     }
-  }
 
-  const singleMatch = text.match(/(\d{1,2})月(\d{1,2})号?/)
-  if (singleMatch) {
-    const [, month, day] = singleMatch
-    return {
-      ok: true,
-      member,
+    actions.push({
+      members: membersInClause,
       status,
-      startDateStr: normalizeChineseDate(month, day),
-      endDateStr: normalizeChineseDate(month, day),
-      summary: `${member} 在 ${Number(month)}月${Number(day)}日 改为${statusMap[status].label}`,
-    }
+      temporalRule: temporalResult.temporalRule,
+      summary: `${membersInClause.join('、')} ${temporalResult.summary} 改为${statusMap[status].label}`,
+    })
   }
 
-  return { ok: false, message: '没有识别到日期，请使用例如“Doris从3月23号到3月31号休假”。' }
+  if (!actions.length) {
+    return { ok: false, message: '没有识别到可执行的子句，请输入包含成员、时间和状态的指令。' }
+  }
+
+  return { ok: true, actions }
 }
-
 function rowsToOverrides(rows) {
   const next = {}
   for (const row of rows || []) {
@@ -224,10 +298,32 @@ async function saveRangeOverride(member, startDateStr, endDateStr, status) {
   }
 }
 
+
+async function saveTemporalRuleOverride(member, status, temporalRule) {
+  if (temporalRule.type === 'date-range') {
+    await saveRangeOverride(member, temporalRule.startDateStr, temporalRule.endDateStr, status)
+    return
+  }
+
+  if (temporalRule.type === 'weekly') {
+    const start = new Date(`${temporalRule.startDateStr}T00:00:00`)
+    const end = new Date(`${temporalRule.endDateStr}T00:00:00`)
+    const cursor = new Date(start)
+
+    while (cursor <= end) {
+      if (cursor.getDay() === temporalRule.weekday) {
+        await saveOneOverride(formatDate(cursor), member, status)
+      }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+  }
+}
+
 export default function App() {
+  const uiYear = 2026
   const todayStr = formatDate(new Date())
-  const initialMonth = todayStr.startsWith('2026-') ? Number(todayStr.slice(5, 7)) - 1 : 2
-  const initialDate = todayStr.startsWith('2026-') ? todayStr : '2026-03-11'
+  const initialMonth = todayStr.startsWith(`${uiYear}-`) ? Number(todayStr.slice(5, 7)) - 1 : 2
+  const initialDate = todayStr.startsWith(`${uiYear}-`) ? todayStr : `${uiYear}-03-11`
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth)
   const [selectedDate, setSelectedDate] = useState(initialDate)
@@ -253,7 +349,7 @@ export default function App() {
     loadInitialData()
   }, [])
 
-  const monthDays = useMemo(() => buildMonth(2026, selectedMonth), [selectedMonth])
+  const monthDays = useMemo(() => buildMonth(uiYear, selectedMonth), [selectedMonth, uiYear])
   const selectedDayType = getDayType(selectedDate)
 
   const selectedStatuses = useMemo(() => {
@@ -303,20 +399,26 @@ export default function App() {
   }
 
   const applyAiCommand = async () => {
-    const parsed = parseAiCommand(aiInput)
+    const parsed = parseAiCommand(aiInput, uiYear)
     if (!parsed.ok) {
       setAiFeedback(parsed.message)
       return
     }
 
     try {
-      await saveRangeOverride(parsed.member, parsed.startDateStr, parsed.endDateStr, parsed.status)
+      for (const action of parsed.actions) {
+        for (const member of action.members) {
+          await saveTemporalRuleOverride(member, action.status, action.temporalRule)
+        }
+      }
+
       const nextOverrides = await fetchOverridesFromSupabase()
       setOverrides(nextOverrides)
-      setSelectedDate(parsed.startDateStr)
-      setSelectedMember(parsed.member)
-      setSelectedMonth(Number(parsed.startDateStr.slice(5, 7)) - 1)
-      setAiFeedback(`已更新：${parsed.summary}`)
+      const firstAction = parsed.actions[0]
+      setSelectedDate(firstAction.temporalRule.startDateStr)
+      setSelectedMember(firstAction.members[0])
+      setSelectedMonth(Number(firstAction.temporalRule.startDateStr.slice(5, 7)) - 1)
+      setAiFeedback(`已更新：${parsed.actions.map((item) => item.summary).join('；')}`)
     } catch (error) {
       console.error('Failed to apply AI command', error)
       setAiFeedback('AI 更新失败，请稍后重试。')
