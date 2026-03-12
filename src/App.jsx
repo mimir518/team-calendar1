@@ -16,6 +16,11 @@ const summaryStatuses = ['office', 'ho', 'off', 'business']
 const statusMap = Object.fromEntries(statusOptions.map((s) => [s.value, s]))
 const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
 const weekdayNames = ['日', '一', '二', '三', '四', '五', '六']
+const aiRecentExamples = [
+  'Doris从3月23号到3月31号休假',
+  'Mary 4月8号HO上午',
+  'Mark 5月1号到5月5号出差',
+]
 
 const holidayMap2026 = {
   '2026-01-01': '元旦',
@@ -237,6 +242,8 @@ export default function App() {
   const [aiFeedback, setAiFeedback] = useState('')
   const [loading, setLoading] = useState(true)
 
+  const buildAiFailureFeedback = (message) => `${message} 最近可用示例：${aiRecentExamples.join('；')}`
+
   useEffect(() => {
     async function loadInitialData() {
       try {
@@ -305,7 +312,7 @@ export default function App() {
   const applyAiCommand = async () => {
     const parsed = parseAiCommand(aiInput)
     if (!parsed.ok) {
-      setAiFeedback(parsed.message)
+      setAiFeedback(buildAiFailureFeedback(parsed.message))
       return
     }
 
@@ -352,6 +359,12 @@ export default function App() {
               <div>
                 <h2>AI 快速录入</h2>
                 <p className="subtle">输入一句话，自动识别人员、日期和状态并更新日历。</p>
+                <div className="notes">
+                  <p>• 人员：支持单人 / 多人（当前会优先识别到的第一位成员）</p>
+                  <p>• 时间：支持日期区间、月份、季度、年份表达</p>
+                  <p>• 规则：支持每周几（如每周一、每周三）</p>
+                  <p>• 状态：支持 HO / 休假 / 出差 / 在公司（含半天）</p>
+                </div>
               </div>
               <div className="mini-tip">示例：Doris从3月23号到3月31号休假</div>
             </div>
