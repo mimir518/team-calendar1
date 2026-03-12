@@ -328,11 +328,7 @@ export default function App() {
       <div className="app-wrap">
         <div className="hero-card card">
           <div>
-            <div className="eyebrow">MVP Preview</div>
-            <h1>Team Status Calendar 2026</h1>
-            <p className="subtle">
-              组员：Doris、Mary、Mark、Jerry、Helen。默认按 2026 年中国工作日 / 周末 / 公共假期自动填充，支持手动改单人状态、半天 HO/休假，以及一句话 AI 录入。
-            </p>
+            <h1>WPM Calendar 2026</h1>
           </div>
           <div className="hero-stats">
             <div className="stat-box">
