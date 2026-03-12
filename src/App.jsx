@@ -224,6 +224,7 @@ export default function App() {
   const [aiFeedback, setAiFeedback] = useState('')
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState(null)
+  const [weekOffset, setWeekOffset] = useState(0)
 
   useEffect(() => {
     async function loadInitialData() {
@@ -241,7 +242,11 @@ export default function App() {
     loadInitialData()
   }, [])
 
-  const weekDates = useMemo(() => getWeekDates(today), [todayStr])
+  const weekDates = useMemo(() => {
+    const targetDate = new Date(today)
+    targetDate.setDate(targetDate.getDate() + weekOffset * 7)
+    return getWeekDates(targetDate)
+  }, [todayStr, weekOffset])
 
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
@@ -340,16 +345,25 @@ export default function App() {
         <section className="card weekly-card">
           <div className="row between wrap gap-12 section-head">
             <div>
-              <h2>本周状态表</h2>
-              <p className="subtle">每行是组员，每列是本周周一到周日，点击单元格即可下拉修改状态。</p>
+              <h2>Weekly Schedule</h2>
+              <p className="subtle">每行是组员，每列是选定周的周一到周日，点击单元格即可下拉修改状态。</p>
             </div>
-            <div className="pill">默认展示：当前周</div>
+            <div className="week-nav-cards">
+              <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev - 1)}>{'<'}</button>
+              <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev + 1)}>{'>'}</button>
+            </div>
           </div>
 
           {loading ? (
             <div className="subtle" style={{ padding: '20px 0' }}>正在读取云端数据...</div>
           ) : (
             <div className="week-table-wrap">
+              <div className="weekdays-strip">
+                <div className="weekday-member-placeholder" />
+                {weekDates.map((date, idx) => (
+                  <div key={`weekday-${formatDate(date)}`} className="weekday-label">{`周${weekdayNames[idx]}`}</div>
+                ))}
+              </div>
               <table className="week-table">
                 <thead>
                   <tr>
@@ -360,10 +374,9 @@ export default function App() {
                       const isToday = dateStr === todayStr
 
                       return (
-                        <th key={dateStr} className={dayType.type === 'holiday' ? 'table-holiday' : dayType.type === 'weekend' ? 'table-weekend' : ''}>
-                          <div>{`周${weekdayNames[idx]}`}</div>
+                        <th key={dateStr} className={`${dayType.type === 'holiday' ? 'table-holiday' : dayType.type === 'weekend' ? 'table-weekend' : ''} ${isToday ? 'table-today-col' : ''}`}>
                           <div className="table-date">{`${date.getMonth() + 1}/${date.getDate()}`}</div>
-                          <div className="table-daytype">{isToday ? '今天' : dayType.label}</div>
+                          <div className="table-daytype">{dayType.label}</div>
                         </th>
                       )
                     })}
@@ -378,9 +391,10 @@ export default function App() {
                         const status = getStatusForDate(dateStr, member)
                         const cellKey = `${member}-${dateStr}`
                         const isEditing = editingCell === cellKey
+                        const isToday = dateStr === todayStr
 
                         return (
-                          <td key={cellKey}>
+                          <td key={cellKey} className={isToday ? 'table-today-col' : ''}>
                             {isEditing ? (
                               <select
                                 autoFocus
