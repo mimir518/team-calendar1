@@ -1,5 +1,6 @@
 import { supabase } from './lib/supabase'
 import React, { useEffect, useMemo, useState } from 'react'
+import { parseAiCommand } from './lib/aiCommandParser'
 
 const members = ['Doris', 'Mary', 'Mark', 'Jerry', 'Helen']
 const statusOptions = [
@@ -99,79 +100,10 @@ function buildMonth(year, monthIndex) {
   return days
 }
 
-function normalizeChineseDate(month, day) {
-  return `2026-${pad(Number(month))}-${pad(Number(day))}`
-}
-
 function collapseStatusForSummary(status) {
   if (status.startsWith('ho')) return 'ho'
   if (status.startsWith('off')) return 'off'
   return status
-}
-
-function parseAiCommand(input) {
-  const text = input.trim()
-  if (!text) return { ok: false, message: '请输入一句指令。' }
-
-  const member = members.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(text))
-  if (!member) {
-    return { ok: false, message: '没有识别到组员名称，请输入 Doris、Mary、Mark、Jerry 或 Helen。' }
-  }
-
-  let status = null
-  if (/HO半天上午/i.test(text) || text.includes('HO上午')) status = 'ho-am'
-  else if (/HO半天下午/i.test(text) || text.includes('HO下午')) status = 'ho-pm'
-  else if (text.includes('休假半天上午') || text.includes('休假上午')) status = 'off-am'
-  else if (text.includes('休假半天下午') || text.includes('休假下午')) status = 'off-pm'
-  else if (text.includes('休假')) status = 'off'
-  else if (/\bHO\b/i.test(text) || text.includes('居家')) status = 'ho'
-  else if (text.includes('出差')) status = 'business'
-  else if (text.includes('在公司') || text.includes('到公司') || text.includes('办公室')) status = 'office'
-
-  if (!status) {
-    return { ok: false, message: '没有识别到状态，请使用 在公司 / HO / 休假 / 出差。' }
-  }
-
-  const fullRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})月(\d{1,2})号?/)
-  if (fullRangeMatch) {
-    const [, startMonth, startDay, endMonth, endDay] = fullRangeMatch
-    return {
-      ok: true,
-      member,
-      status,
-      startDateStr: normalizeChineseDate(startMonth, startDay),
-      endDateStr: normalizeChineseDate(endMonth, endDay),
-      summary: `${member} 从 ${Number(startMonth)}月${Number(startDay)}日 到 ${Number(endMonth)}月${Number(endDay)}日改为${statusMap[status].label}`,
-    }
-  }
-
-  const sameMonthRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})号?/)
-  if (sameMonthRangeMatch) {
-    const [, month, startDay, endDay] = sameMonthRangeMatch
-    return {
-      ok: true,
-      member,
-      status,
-      startDateStr: normalizeChineseDate(month, startDay),
-      endDateStr: normalizeChineseDate(month, endDay),
-      summary: `${member} 从 ${Number(month)}月${Number(startDay)}日 到 ${Number(month)}月${Number(endDay)}日改为${statusMap[status].label}`,
-    }
-  }
-
-  const singleMatch = text.match(/(\d{1,2})月(\d{1,2})号?/)
-  if (singleMatch) {
-    const [, month, day] = singleMatch
-    return {
-      ok: true,
-      member,
-      status,
-      startDateStr: normalizeChineseDate(month, day),
-      endDateStr: normalizeChineseDate(month, day),
-      summary: `${member} 在 ${Number(month)}月${Number(day)}日 改为${statusMap[status].label}`,
-    }
-  }
-
-  return { ok: false, message: '没有识别到日期，请使用例如“Doris从3月23号到3月31号休假”。' }
 }
 
 function rowsToOverrides(rows) {
@@ -209,18 +141,6 @@ async function saveOneOverride(dateStr, member, status) {
       .insert([{ person_name: member, event_date: dateStr, status }])
 
     if (insertError) throw insertError
-  }
-}
-
-async function saveRangeOverride(member, startDateStr, endDateStr, status) {
-  const start = new Date(`${startDateStr}T00:00:00`)
-  const end = new Date(`${endDateStr}T00:00:00`)
-  const cursor = new Date(start)
-
-  while (cursor <= end) {
-    const dateStr = formatDate(cursor)
-    await saveOneOverride(dateStr, member, status)
-    cursor.setDate(cursor.getDate() + 1)
   }
 }
 
@@ -303,19 +223,26 @@ export default function App() {
   }
 
   const applyAiCommand = async () => {
-    const parsed = parseAiCommand(aiInput)
+    const parsed = parseAiCommand(aiInput, {
+      members,
+      statusMap,
+      baseDate: new Date(`${selectedDate}T00:00:00`),
+      defaultYear: 2026,
+    })
     if (!parsed.ok) {
       setAiFeedback(parsed.message)
       return
     }
 
     try {
-      await saveRangeOverride(parsed.member, parsed.startDateStr, parsed.endDateStr, parsed.status)
+      for (const op of parsed.operations) {
+        await saveOneOverride(op.dateStr, op.member, op.status)
+      }
       const nextOverrides = await fetchOverridesFromSupabase()
       setOverrides(nextOverrides)
-      setSelectedDate(parsed.startDateStr)
-      setSelectedMember(parsed.member)
-      setSelectedMonth(Number(parsed.startDateStr.slice(5, 7)) - 1)
+      setSelectedDate(parsed.firstDateStr)
+      setSelectedMember(parsed.firstMember)
+      setSelectedMonth(Number(parsed.firstDateStr.slice(5, 7)) - 1)
       setAiFeedback(`已更新：${parsed.summary}`)
     } catch (error) {
       console.error('Failed to apply AI command', error)
