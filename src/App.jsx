@@ -99,8 +99,8 @@ function buildMonth(year, monthIndex) {
   return days
 }
 
-function normalizeChineseDate(month, day) {
-  return `2026-${pad(Number(month))}-${pad(Number(day))}`
+function normalizeChineseDate(month, day, year = 2026) {
+  return `${year}-${pad(Number(month))}-${pad(Number(day))}`
 }
 
 
@@ -108,12 +108,12 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function getQuarterDateRange(quarter) {
+function getQuarterDateRange(quarter, year = 2026) {
   const quarterMap = {
-    1: { startDateStr: '2026-01-01', endDateStr: '2026-03-31' },
-    2: { startDateStr: '2026-04-01', endDateStr: '2026-06-30' },
-    3: { startDateStr: '2026-07-01', endDateStr: '2026-09-30' },
-    4: { startDateStr: '2026-10-01', endDateStr: '2026-12-31' },
+    1: { startDateStr: `${year}-01-01`, endDateStr: `${year}-03-31` },
+    2: { startDateStr: `${year}-04-01`, endDateStr: `${year}-06-30` },
+    3: { startDateStr: `${year}-07-01`, endDateStr: `${year}-09-30` },
+    4: { startDateStr: `${year}-10-01`, endDateStr: `${year}-12-31` },
   }
   return quarterMap[quarter]
 }
@@ -135,15 +135,15 @@ function extractMembersFromText(text) {
   return [...new Set(matched)]
 }
 
-function parseTemporalRuleFromText(text, fallbackQuarter) {
+function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
   const fullRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})月(\d{1,2})号?/)
   if (fullRangeMatch) {
     const [, startMonth, startDay, endMonth, endDay] = fullRangeMatch
     return {
       temporalRule: {
         type: 'date-range',
-        startDateStr: normalizeChineseDate(startMonth, startDay),
-        endDateStr: normalizeChineseDate(endMonth, endDay),
+        startDateStr: normalizeChineseDate(startMonth, startDay, defaultYear),
+        endDateStr: normalizeChineseDate(endMonth, endDay, defaultYear),
       },
       summary: `从 ${Number(startMonth)}月${Number(startDay)}日 到 ${Number(endMonth)}月${Number(endDay)}日`,
     }
@@ -155,8 +155,8 @@ function parseTemporalRuleFromText(text, fallbackQuarter) {
     return {
       temporalRule: {
         type: 'date-range',
-        startDateStr: normalizeChineseDate(month, startDay),
-        endDateStr: normalizeChineseDate(month, endDay),
+        startDateStr: normalizeChineseDate(month, startDay, defaultYear),
+        endDateStr: normalizeChineseDate(month, endDay, defaultYear),
       },
       summary: `从 ${Number(month)}月${Number(startDay)}日 到 ${Number(month)}月${Number(endDay)}日`,
     }
@@ -168,8 +168,8 @@ function parseTemporalRuleFromText(text, fallbackQuarter) {
     return {
       temporalRule: {
         type: 'date-range',
-        startDateStr: normalizeChineseDate(month, day),
-        endDateStr: normalizeChineseDate(month, day),
+        startDateStr: normalizeChineseDate(month, day, defaultYear),
+        endDateStr: normalizeChineseDate(month, day, defaultYear),
       },
       summary: `${Number(month)}月${Number(day)}日`,
     }
@@ -184,7 +184,7 @@ function parseTemporalRuleFromText(text, fallbackQuarter) {
   if (weekdayMatch) {
     const weekdayMap = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
     const weekday = weekdayMap[weekdayMatch[1]]
-    const range = quarter ? getQuarterDateRange(quarter) : { startDateStr: '2026-01-01', endDateStr: '2026-12-31' }
+    const range = quarter ? getQuarterDateRange(quarter, defaultYear) : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
 
     return {
       temporalRule: {
@@ -206,7 +206,7 @@ function collapseStatusForSummary(status) {
   return status
 }
 
-function parseAiCommand(input) {
+function parseAiCommand(input, defaultYear = 2026) {
   const text = input.trim()
   if (!text) return { ok: false, message: '请输入一句指令。' }
 
@@ -229,7 +229,7 @@ function parseAiCommand(input) {
       return { ok: false, message: `子句“${clause}”没有识别到状态，请使用 在公司 / HO / 休假 / 出差。` }
     }
 
-    const temporalResult = parseTemporalRuleFromText(clause, fallbackQuarter)
+    const temporalResult = parseTemporalRuleFromText(clause, fallbackQuarter, defaultYear)
     if (!temporalResult) {
       return { ok: false, message: `子句“${clause}”没有识别到时间，请补充日期或“每周几”。` }
     }
@@ -320,9 +320,10 @@ async function saveTemporalRuleOverride(member, status, temporalRule) {
 }
 
 export default function App() {
+  const uiYear = 2026
   const todayStr = formatDate(new Date())
-  const initialMonth = todayStr.startsWith('2026-') ? Number(todayStr.slice(5, 7)) - 1 : 2
-  const initialDate = todayStr.startsWith('2026-') ? todayStr : '2026-03-11'
+  const initialMonth = todayStr.startsWith(`${uiYear}-`) ? Number(todayStr.slice(5, 7)) - 1 : 2
+  const initialDate = todayStr.startsWith(`${uiYear}-`) ? todayStr : `${uiYear}-03-11`
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth)
   const [selectedDate, setSelectedDate] = useState(initialDate)
@@ -348,7 +349,7 @@ export default function App() {
     loadInitialData()
   }, [])
 
-  const monthDays = useMemo(() => buildMonth(2026, selectedMonth), [selectedMonth])
+  const monthDays = useMemo(() => buildMonth(uiYear, selectedMonth), [selectedMonth, uiYear])
   const selectedDayType = getDayType(selectedDate)
 
   const selectedStatuses = useMemo(() => {
@@ -398,7 +399,7 @@ export default function App() {
   }
 
   const applyAiCommand = async () => {
-    const parsed = parseAiCommand(aiInput)
+    const parsed = parseAiCommand(aiInput, uiYear)
     if (!parsed.ok) {
       setAiFeedback(parsed.message)
       return
