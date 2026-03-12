@@ -487,14 +487,15 @@ async function saveTemporalRuleOverride(member, status, temporalRule) {
       }
       cursor.setDate(cursor.getDate() + 1)
     }
+  }
+}
 
 async function saveDatesOverride(member, dates, status) {
   for (const dateStr of dates) {
     await saveOneOverride(dateStr, member, status)
-
   }
 }
-
+  
 export default function App() {
   const uiYear = 2026
   const todayStr = formatDate(new Date())
