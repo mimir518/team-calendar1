@@ -66,6 +66,98 @@ function formatDate(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+function parseTemporalRule(text, defaultYear = 2026) {
+  const trimmed = text.trim()
+  const yearMatch = trimmed.match(/(\d{4})年/)
+  const year = yearMatch ? Number(yearMatch[1]) : defaultYear
+
+  const quarterMatch = trimmed.match(/(?:第?([一二三四1-4])季度|([Qq][1-4]))/)
+  const monthMatch = trimmed.match(/(\d{1,2})月/)
+  const fullYearMatch = trimmed.match(/(\d{4})年(?!\s*\d{1,2}月)/)
+  const weekMatch = trimmed.match(/每周([一二三四五六日天])/)
+
+  let rangeType = null
+  let startDate = null
+  let endDate = null
+  let quarter = null
+  let month = null
+
+  if (quarterMatch) {
+    const quarterToken = quarterMatch[1] || quarterMatch[2]
+    const quarterMap = {
+      一: 1,
+      二: 2,
+      三: 3,
+      四: 4,
+      1: 1,
+      2: 2,
+      3: 3,
+      4: 4,
+      Q1: 1,
+      Q2: 2,
+      Q3: 3,
+      Q4: 4,
+      q1: 1,
+      q2: 2,
+      q3: 3,
+      q4: 4,
+    }
+    quarter = quarterMap[quarterToken]
+    if (!quarter) return { ok: false, message: '识别到季度，但季度格式不正确。' }
+    rangeType = 'quarter'
+    const startMonth = (quarter - 1) * 3
+    startDate = new Date(year, startMonth, 1)
+    endDate = new Date(year, startMonth + 3, 0)
+  } else if (monthMatch) {
+    month = Number(monthMatch[1])
+    if (month < 1 || month > 12) return { ok: false, message: '识别到月份，但月份应在 1-12 之间。' }
+    rangeType = 'month'
+    startDate = new Date(year, month - 1, 1)
+    endDate = new Date(year, month, 0)
+  } else if (fullYearMatch) {
+    rangeType = 'year'
+    startDate = new Date(year, 0, 1)
+    endDate = new Date(year, 11, 31)
+  }
+
+  const weekMap = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
+  const weekday = weekMatch ? weekMap[weekMatch[1]] : null
+
+  if (trimmed.includes('每周') && weekday == null) {
+    return { ok: false, message: '识别到每周规则，但未识别到周几（应为每周一到每周日）。' }
+  }
+
+  if (!rangeType && weekday == null) {
+    return { ok: false, message: '没有识别到时间规则，请使用季度、月份、年份或每周几。' }
+  }
+
+  return {
+    ok: true,
+    type: rangeType || 'unbounded-weekday',
+    year,
+    quarter,
+    month,
+    weekday,
+    startDate,
+    endDate,
+  }
+}
+
+function expandTemporalRuleToDates(rule) {
+  if (!rule?.ok) return []
+  if (!rule.startDate || !rule.endDate) return []
+
+  const dates = []
+  const cursor = new Date(rule.startDate)
+  while (cursor <= rule.endDate) {
+    if (rule.weekday == null || cursor.getDay() === rule.weekday) {
+      dates.push(formatDate(cursor))
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dates
+}
+
 function isWeekend(date) {
   const day = date.getDay()
   return day === 0 || day === 6
@@ -99,8 +191,8 @@ function buildMonth(year, monthIndex) {
   return days
 }
 
-function normalizeChineseDate(month, day) {
-  return `2026-${pad(Number(month))}-${pad(Number(day))}`
+function normalizeChineseDate(month, day, year = 2026) {
+  return `${year}-${pad(Number(month))}-${pad(Number(day))}`
 }
 
 function collapseStatusForSummary(status) {
@@ -109,7 +201,7 @@ function collapseStatusForSummary(status) {
   return status
 }
 
-function parseAiCommand(input) {
+function parseAiCommand(input, defaultYear = 2026) {
   const text = input.trim()
   if (!text) return { ok: false, message: '请输入一句指令。' }
 
@@ -129,18 +221,44 @@ function parseAiCommand(input) {
   else if (text.includes('在公司') || text.includes('到公司') || text.includes('办公室')) status = 'office'
 
   if (!status) {
+    const temporalProbe = parseTemporalRule(text, defaultYear)
+    if (temporalProbe.ok && temporalProbe.type === 'quarter') {
+      return { ok: false, message: '识别到季度，但未识别到状态，请使用 在公司 / HO / 休假 / 出差。' }
+    }
     return { ok: false, message: '没有识别到状态，请使用 在公司 / HO / 休假 / 出差。' }
+  }
+
+  const temporalRule = parseTemporalRule(text, defaultYear)
+  if (temporalRule.ok && temporalRule.type !== 'unbounded-weekday') {
+    const dates = expandTemporalRuleToDates(temporalRule)
+    if (!dates.length) {
+      return { ok: false, message: '识别到时间规则，但未展开出可用日期。' }
+    }
+    return {
+      ok: true,
+      member,
+      status,
+      dates,
+      startDateStr: dates[0],
+      endDateStr: dates[dates.length - 1],
+      summary: `${member} 在 ${dates[0]} 到 ${dates[dates.length - 1]} 按规则改为${statusMap[status].label}${temporalRule.weekday == null ? '' : `（仅周${weekdayNames[temporalRule.weekday]}）`}`,
+    }
+  }
+
+  if (!temporalRule.ok && /季度|Q[1-4]|月|\d{4}年|每周/.test(text)) {
+    return temporalRule
   }
 
   const fullRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})月(\d{1,2})号?/)
   if (fullRangeMatch) {
     const [, startMonth, startDay, endMonth, endDay] = fullRangeMatch
+    const year = Number((text.match(/(\d{4})年/) || [])[1] || defaultYear)
     return {
       ok: true,
       member,
       status,
-      startDateStr: normalizeChineseDate(startMonth, startDay),
-      endDateStr: normalizeChineseDate(endMonth, endDay),
+      startDateStr: normalizeChineseDate(startMonth, startDay, year),
+      endDateStr: normalizeChineseDate(endMonth, endDay, year),
       summary: `${member} 从 ${Number(startMonth)}月${Number(startDay)}日 到 ${Number(endMonth)}月${Number(endDay)}日改为${statusMap[status].label}`,
     }
   }
@@ -148,12 +266,13 @@ function parseAiCommand(input) {
   const sameMonthRangeMatch = text.match(/(\d{1,2})月(\d{1,2})号?到(\d{1,2})号?/)
   if (sameMonthRangeMatch) {
     const [, month, startDay, endDay] = sameMonthRangeMatch
+    const year = Number((text.match(/(\d{4})年/) || [])[1] || defaultYear)
     return {
       ok: true,
       member,
       status,
-      startDateStr: normalizeChineseDate(month, startDay),
-      endDateStr: normalizeChineseDate(month, endDay),
+      startDateStr: normalizeChineseDate(month, startDay, year),
+      endDateStr: normalizeChineseDate(month, endDay, year),
       summary: `${member} 从 ${Number(month)}月${Number(startDay)}日 到 ${Number(month)}月${Number(endDay)}日改为${statusMap[status].label}`,
     }
   }
@@ -161,12 +280,13 @@ function parseAiCommand(input) {
   const singleMatch = text.match(/(\d{1,2})月(\d{1,2})号?/)
   if (singleMatch) {
     const [, month, day] = singleMatch
+    const year = Number((text.match(/(\d{4})年/) || [])[1] || defaultYear)
     return {
       ok: true,
       member,
       status,
-      startDateStr: normalizeChineseDate(month, day),
-      endDateStr: normalizeChineseDate(month, day),
+      startDateStr: normalizeChineseDate(month, day, year),
+      endDateStr: normalizeChineseDate(month, day, year),
       summary: `${member} 在 ${Number(month)}月${Number(day)}日 改为${statusMap[status].label}`,
     }
   }
@@ -224,10 +344,17 @@ async function saveRangeOverride(member, startDateStr, endDateStr, status) {
   }
 }
 
+async function saveDatesOverride(member, dates, status) {
+  for (const dateStr of dates) {
+    await saveOneOverride(dateStr, member, status)
+  }
+}
+
 export default function App() {
+  const uiYear = 2026
   const todayStr = formatDate(new Date())
-  const initialMonth = todayStr.startsWith('2026-') ? Number(todayStr.slice(5, 7)) - 1 : 2
-  const initialDate = todayStr.startsWith('2026-') ? todayStr : '2026-03-11'
+  const initialMonth = todayStr.startsWith(`${uiYear}-`) ? Number(todayStr.slice(5, 7)) - 1 : 2
+  const initialDate = todayStr.startsWith(`${uiYear}-`) ? todayStr : `${uiYear}-03-11`
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth)
   const [selectedDate, setSelectedDate] = useState(initialDate)
@@ -253,7 +380,7 @@ export default function App() {
     loadInitialData()
   }, [])
 
-  const monthDays = useMemo(() => buildMonth(2026, selectedMonth), [selectedMonth])
+  const monthDays = useMemo(() => buildMonth(uiYear, selectedMonth), [selectedMonth, uiYear])
   const selectedDayType = getDayType(selectedDate)
 
   const selectedStatuses = useMemo(() => {
@@ -303,14 +430,15 @@ export default function App() {
   }
 
   const applyAiCommand = async () => {
-    const parsed = parseAiCommand(aiInput)
+    const parsed = parseAiCommand(aiInput, uiYear)
     if (!parsed.ok) {
       setAiFeedback(parsed.message)
       return
     }
 
     try {
-      await saveRangeOverride(parsed.member, parsed.startDateStr, parsed.endDateStr, parsed.status)
+      if (parsed.dates) await saveDatesOverride(parsed.member, parsed.dates, parsed.status)
+      else await saveRangeOverride(parsed.member, parsed.startDateStr, parsed.endDateStr, parsed.status)
       const nextOverrides = await fetchOverridesFromSupabase()
       setOverrides(nextOverrides)
       setSelectedDate(parsed.startDateStr)
