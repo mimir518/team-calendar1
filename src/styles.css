@@ -98,6 +98,33 @@ h2 { margin: 0; font-size: 22px; }
 .status-business { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
 .weekly-card { width: 100%; }
 .week-table-wrap { width: 100%; overflow-x: auto; }
+.week-nav-cards {
+  display: flex;
+  gap: 8px;
+}
+.week-nav-card {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  font-size: 18px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+}
+.weekdays-strip {
+  display: grid;
+  grid-template-columns: 140px repeat(7, minmax(120px, 1fr));
+  margin-bottom: 8px;
+}
+.weekday-member-placeholder { min-height: 1px; }
+.weekday-label {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
 .week-table {
   width: 100%;
   border-collapse: separate;
@@ -126,10 +153,13 @@ h2 { margin: 0; font-size: 22px; }
 }
 .week-table thead th:first-child { width: 140px; }
 .member-col { background: #f8fafc !important; }
-.table-date { font-size: 12px; color: #334155; margin-top: 2px; }
+.table-date { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 .table-daytype { font-size: 11px; margin-top: 2px; }
 .table-weekend { background: #f1f5f9 !important; }
 .table-holiday { background: #fff1f2 !important; }
+.table-today-col {
+  box-shadow: inset 0 0 0 2px #38bdf8;
+}
 .table-status {
   width: 100%;
   border: 1px solid var(--line);
@@ -156,4 +186,5 @@ h2 { margin: 0; font-size: 22px; }
   h1 { font-size: 28px; }
   h2 { font-size: 18px; }
   .week-table thead th:first-child { width: 100px; }
+  .weekdays-strip { grid-template-columns: 100px repeat(7, minmax(110px, 1fr)); }
 }
