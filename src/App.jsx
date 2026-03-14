@@ -400,6 +400,7 @@ export default function App() {
             <div>
               <h2>Weekly Schedule</h2>
               <p className="subtle">点击单元格即可下拉修改状态。</p>
+              <p className="mini-tip">手机竖屏可左右滑动查看整周。</p>
             </div>
             <div className="week-nav-cards">
               <div className="week-jump-card">
