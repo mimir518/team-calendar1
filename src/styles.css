@@ -180,7 +180,7 @@ h2 { margin: 0; font-size: 22px; }
   table-layout: fixed;
   border: 1px solid #e6ecf3;
   border-radius: 14px;
-  overflow: hidden;
+  overflow: visible;
   background: #f8fafc;
 }
 .week-table th,
@@ -209,12 +209,14 @@ h2 { margin: 0; font-size: 22px; }
   position: sticky;
   left: 0;
   background: #f5f8fc !important;
+  transform: translateZ(0);
+  will-change: transform;
 }
 .member-head {
-  z-index: 8;
+  z-index: 10;
 }
 .member-col {
-  z-index: 7;
+  z-index: 9;
   box-shadow: 2px 0 0 #e9eef5;
 }
 .week-table thead th:first-child { width: 120px; min-width: 120px; }
