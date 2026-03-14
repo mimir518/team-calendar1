@@ -1,5 +1,5 @@
 import { supabase } from './lib/supabase'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 const members = ['Doris', 'Mary', 'Mark', 'Jerry', 'Helen']
 
@@ -333,7 +333,7 @@ export default function App() {
   const todayStr = formatDate(today)
 
   const [overrides, setOverrides] = useState({})
-  const [aiInput, setAiInput] = useState('Doris从3月23号到3月31号休假')
+  const [aiInput, setAiInput] = useState('')
   const [aiFeedback, setAiFeedback] = useState('')
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState(null)
@@ -342,6 +342,7 @@ export default function App() {
   const [yearPickerOpen, setYearPickerOpen] = useState(false)
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const actionMenuRef = useRef(null)
 
   const thisWeekMonday = useMemo(() => getWeekDates(today)[0], [todayStr])
   const [weekAnchorDate, setWeekAnchorDate] = useState(thisWeekMonday)
@@ -390,6 +391,19 @@ export default function App() {
     setWeekAnchorDate(targetDate)
     setWeekOffset(0)
   }, [selectedYear, jumpMonth, jumpDay])
+
+  useEffect(() => {
+    if (!actionMenuOpen) return
+
+    const handleClickOutside = (event) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+        setActionMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [actionMenuOpen])
 
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
@@ -504,7 +518,7 @@ export default function App() {
           <div className="ai-box">
             <div className="row gap-12 ai-inline-row">
               <h2>AI 快速录入</h2>
-              <div className="menu-wrap">
+              <div className="menu-wrap" ref={actionMenuRef}>
                 <button
                   type="button"
                   className="menu-trigger"
