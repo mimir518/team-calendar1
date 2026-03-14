@@ -387,11 +387,16 @@ async function saveOverrides(entries) {
   }
 
   if (upsertRows.length) {
-    const { error: upsertError } = await supabase
-      .from('calendar_events')
-      .upsert(upsertRows, { onConflict: 'person_name,event_date' })
+    const UPSERT_CHUNK_SIZE = 200
 
-    if (upsertError) throw upsertError
+    for (let i = 0; i < upsertRows.length; i += UPSERT_CHUNK_SIZE) {
+      const upsertChunk = upsertRows.slice(i, i + UPSERT_CHUNK_SIZE)
+      const { error: upsertError } = await supabase
+        .from('calendar_events')
+        .upsert(upsertChunk, { onConflict: 'person_name,event_date' })
+
+      if (upsertError) throw upsertError
+    }
   }
 }
 
@@ -672,9 +677,10 @@ export default function App() {
       const pendingWrites = []
 
       for (const action of parsed.actions) {
-        for (const member of action.members) {
-          const dateList = getDateStringsFromTemporalRule(action.temporalRule)
-          for (const dateStr of dateList) {
+        const dateList = getDateStringsFromTemporalRule(action.temporalRule)
+
+        for (const dateStr of dateList) {
+          for (const member of action.members) {
             const currentStatus = getStatusFromMap(dateStr, member, draftOverrides)
             const finalStatus = getFinalStatusBySource(currentStatus, action.status, dateStr, 'ai')
 
