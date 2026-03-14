@@ -201,7 +201,14 @@ h2 { margin: 0; font-size: 22px; }
   background: #f5f8fc;
 }
 .week-table thead th:first-child { width: 120px; min-width: 120px; }
-.member-col { background: #f5f8fc !important; }
+.week-table thead th:first-child,
+.member-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f5f8fc !important;
+}
+.week-table thead th:first-child { z-index: 4; }
 .table-date { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 .table-daytype { font-size: 11px; margin-top: 2px; }
 .table-weekend-off { background: #fff5f6 !important; }
@@ -237,11 +244,13 @@ h2 { margin: 0; font-size: 22px; }
 @media (max-width: 640px) {
   .app-wrap { padding: 14px; }
   .card { padding: 16px; border-radius: 14px; }
-  .hero-card { flex-direction: column; }
-  .hero-stats { width: 100%; }
+  .hero-card { flex-direction: column; align-items: center; }
+  .hero-title-wrap { justify-content: center; width: 100%; }
+  .hero-stats { width: 100%; display: flex; justify-content: center; }
   h1 { font-size: 28px; }
   h2 { font-size: 18px; }
   .week-table thead th:first-child { width: 90px; min-width: 90px; }
+  .stat-box { text-align: center; }
   .weekdays-strip {
     grid-template-columns: 90px repeat(7, minmax(100px, 1fr));
     min-width: 790px;

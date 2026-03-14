@@ -344,7 +344,7 @@ export default function App() {
       <div className="app-wrap">
         <div className="hero-card card">
           <div className="hero-title-wrap">
-            <h1>WPM Calendar</h1>
+            <h1>WPM团队日历</h1>
           </div>
           <div className="hero-stats">
             <button
@@ -393,7 +393,7 @@ export default function App() {
         <section className="card weekly-card">
           <div className="row between wrap gap-12 section-head">
             <div>
-              <h2>Weekly Schedule</h2>
+              <h2>每周安排</h2>
               <p className="subtle">点击单元格即可下拉修改状态。</p>
             </div>
             <div className="week-nav-cards">
