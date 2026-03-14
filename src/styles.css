@@ -121,6 +121,7 @@ h2 { margin: 0; font-size: 22px; }
 .status-off { background: #fff1f2; color: #9f4b63; border-color: #ffdce1; }
 .status-off-dark { background: #fff1f2; color: #9f4b63; border-color: #ffdce1; }
 .status-business { background: #fff3e6; color: #a26428; border-color: #ffe2c0; }
+.status-mixed { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
 .weekly-card { width: 100%; }
 .week-table-wrap {
   width: 100%;

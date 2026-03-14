@@ -93,6 +93,69 @@ function getDefaultStatus(dateStr) {
   return dayType === 'holiday' || dayType === 'weekend' ? 'off' : 'office'
 }
 
+function isHalfDayStatus(status) {
+  return typeof status === 'string' && /-(am|pm)$/.test(status)
+}
+
+function isOffStatus(status) {
+  if (!status) return false
+  return status.split('+').some((item) => item === 'off' || item.startsWith('off-'))
+}
+
+function getHalfDayPeriod(status) {
+  if (status.endsWith('-am')) return 'am'
+  if (status.endsWith('-pm')) return 'pm'
+  return null
+}
+
+function splitCompositeStatus(status) {
+  return String(status || '')
+    .split('+')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function buildCompositeStatus(segments) {
+  const unique = [...new Set(segments)]
+  const ordered = unique.sort((a, b) => {
+    const periodA = getHalfDayPeriod(a)
+    const periodB = getHalfDayPeriod(b)
+    if (periodA === periodB) return 0
+    if (periodA === 'am') return -1
+    if (periodB === 'am') return 1
+    return a.localeCompare(b)
+  })
+  return ordered.join('+')
+}
+
+function getStatusMeta(status) {
+  if (statusMap[status]) return statusMap[status]
+
+  const segments = splitCompositeStatus(status).filter((item) => statusMap[item])
+  if (!segments.length) {
+    return { label: String(status), shortLabel: String(status), className: 'status-office' }
+  }
+
+  return {
+    label: segments.map((item) => statusMap[item].label).join(' + '),
+    shortLabel: segments.map((item) => statusMap[item].shortLabel).join('+'),
+    className: 'status-mixed',
+  }
+}
+
+function resolveNextStatus(currentStatus, requestedStatus) {
+  if (!isHalfDayStatus(requestedStatus)) return requestedStatus
+
+  const currentSegments = splitCompositeStatus(currentStatus)
+  const halfDaySegments = currentSegments.filter(isHalfDayStatus)
+
+  if (!halfDaySegments.length) return requestedStatus
+
+  const requestedPeriod = getHalfDayPeriod(requestedStatus)
+  const withoutSamePeriod = halfDaySegments.filter((item) => getHalfDayPeriod(item) !== requestedPeriod)
+  return buildCompositeStatus([...withoutSamePeriod, requestedStatus])
+}
+
 function normalizeChineseDate(month, day, year) {
   return `${year}-${pad(Number(month))}-${pad(Number(day))}`
 }
@@ -327,6 +390,35 @@ async function saveTemporalRuleOverride(member, status, temporalRule) {
   }
 }
 
+function getDateStringsFromTemporalRule(temporalRule) {
+  const results = []
+
+  if (temporalRule.type === 'date-range') {
+    const start = new Date(`${temporalRule.startDateStr}T00:00:00`)
+    const end = new Date(`${temporalRule.endDateStr}T00:00:00`)
+    const cursor = new Date(start)
+    while (cursor <= end) {
+      results.push(formatDate(cursor))
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return results
+  }
+
+  if (temporalRule.type === 'weekly') {
+    const start = new Date(`${temporalRule.startDateStr}T00:00:00`)
+    const end = new Date(`${temporalRule.endDateStr}T00:00:00`)
+    const cursor = new Date(start)
+    while (cursor <= end) {
+      if (cursor.getDay() === temporalRule.weekday) {
+        results.push(formatDate(cursor))
+      }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+  }
+
+  return results
+}
+
 export default function App() {
   const today = new Date()
   const currentYear = today.getFullYear()
@@ -391,12 +483,40 @@ export default function App() {
 
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
+  const getStatusFromMap = (dateStr, member, sourceMap) => sourceMap[dateStr]?.[member] || getDefaultStatus(dateStr)
+
+  const putStatusToMap = (dateStr, member, status, sourceMap) => {
+    const next = { ...sourceMap }
+    const dayMap = { ...(next[dateStr] || {}) }
+    const defaultStatus = getDefaultStatus(dateStr)
+
+    if (status === defaultStatus) {
+      delete dayMap[member]
+      if (Object.keys(dayMap).length) next[dateStr] = dayMap
+      else delete next[dateStr]
+      return next
+    }
+
+    dayMap[member] = status
+    next[dateStr] = dayMap
+    return next
+  }
+
+  const getFinalStatusBySource = (currentStatus, requestedStatus, dateStr, source) => {
+    if (source === 'ai' && getDayType(dateStr).type === 'holiday' && currentStatus === 'off' && !isOffStatus(requestedStatus)) {
+      return 'off'
+    }
+    return resolveNextStatus(currentStatus, requestedStatus)
+  }
+
   const updateMemberStatus = async (member, dateStr, nextStatus) => {
     try {
-      await saveOneOverride(dateStr, member, nextStatus)
+      const currentStatus = getStatusForDate(dateStr, member)
+      const finalStatus = getFinalStatusBySource(currentStatus, nextStatus, dateStr, 'manual')
+      await saveOneOverride(dateStr, member, finalStatus)
       const nextOverrides = await fetchOverridesFromSupabase()
       setOverrides(nextOverrides)
-      setAiFeedback(`${member} 在 ${dateStr} 已更新为 ${statusMap[nextStatus].label}`)
+      setAiFeedback(`${member} 在 ${dateStr} 已更新为 ${getStatusMeta(finalStatus).label}`)
       setEditingCell(null)
     } catch (error) {
       console.error('Failed to update member status', error)
@@ -430,9 +550,16 @@ export default function App() {
     }
 
     try {
+      let draftOverrides = { ...overrides }
       for (const action of parsed.actions) {
         for (const member of action.members) {
-          await saveTemporalRuleOverride(member, action.status, action.temporalRule)
+          const dateList = getDateStringsFromTemporalRule(action.temporalRule)
+          for (const dateStr of dateList) {
+            const currentStatus = getStatusFromMap(dateStr, member, draftOverrides)
+            const finalStatus = getFinalStatusBySource(currentStatus, action.status, dateStr, 'ai')
+            await saveOneOverride(dateStr, member, finalStatus)
+            draftOverrides = putStatusToMap(dateStr, member, finalStatus, draftOverrides)
+          }
         }
       }
 
@@ -592,10 +719,10 @@ export default function App() {
                               </select>
                             ) : (
                               <button
-                                className={`table-status ${statusMap[status].className}`}
+                                className={`table-status ${getStatusMeta(status).className}`}
                                 onClick={() => setEditingCell(cellKey)}
                               >
-                                {statusMap[status].shortLabel}
+                                {getStatusMeta(status).shortLabel}
                               </button>
                             )}
                           </td>
