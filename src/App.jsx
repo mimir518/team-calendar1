@@ -352,7 +352,6 @@ export default function App() {
               className="stat-box"
               onClick={() => setYearPickerOpen((prev) => !prev)}
             >
-              <div className="stat-label">年份</div>
               {yearPickerOpen ? (
                 <select
                   className="year-select"
@@ -380,9 +379,7 @@ export default function App() {
             <div className="row between wrap gap-12">
               <div>
                 <h2>AI 快速录入</h2>
-                <p className="subtle">输入一句话，自动识别人员、日期和状态并更新日历。</p>
               </div>
-              <div className="mini-tip">示例：Doris从3月23号到3月31号休假</div>
             </div>
 
             <div className="row wrap gap-12 top-gap">
@@ -393,7 +390,6 @@ export default function App() {
                 className="text-input"
               />
               <button onClick={applyAiCommand} className="primary-btn">AI 更新日历</button>
-              <button onClick={resetAllData} className="ghost-btn">清空自定义数据</button>
             </div>
             {aiFeedback ? <div className="feedback">{aiFeedback}</div> : null}
           </div>
