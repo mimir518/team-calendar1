@@ -72,6 +72,14 @@ h2 { margin: 0; font-size: 22px; }
   border-radius: 14px;
   padding: 12px;
 }
+
+.ai-inline-row {
+  align-items: center;
+}
+.ai-inline-row h2 {
+  font-size: 18px;
+  white-space: nowrap;
+}
 .text-input, .select-input {
   background: #fff;
   border: 1px solid var(--line);
