@@ -393,7 +393,7 @@ export default function App() {
         <section className="card weekly-card">
           <div className="row between wrap gap-12 section-head">
             <div>
-              <h2>Weekly Schedule</h2>
+              <h2>每周安排</h2>
               <p className="subtle">点击单元格即可下拉修改状态。</p>
             </div>
             <div className="week-nav-cards">
@@ -435,7 +435,7 @@ export default function App() {
               <table className="week-table">
                 <thead>
                   <tr>
-                    <th>成员</th>
+                    <th className="member-head">成员</th>
                     {weekDates.map((date, idx) => {
                       const dateStr = formatDate(date)
                       const dayType = getDayType(dateStr)

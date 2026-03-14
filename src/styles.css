@@ -49,8 +49,10 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter,
   min-width: 110px;
   cursor: pointer;
   text-align: left;
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
 }
-.stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+.stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; color: #0f172a; -webkit-text-fill-color: #0f172a; }
 .year-select {
   width: 100%;
   margin-top: 4px;
@@ -180,7 +182,7 @@ h2 { margin: 0; font-size: 22px; }
   table-layout: fixed;
   border: 1px solid #e6ecf3;
   border-radius: 14px;
-  overflow: hidden;
+  overflow: visible;
   background: #f8fafc;
 }
 .week-table th,
@@ -200,8 +202,27 @@ h2 { margin: 0; font-size: 22px; }
   font-weight: 700;
   background: #f5f8fc;
 }
+.member-head,
+.member-col {
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+  position: -webkit-sticky;
+  position: sticky;
+  left: 0;
+  background: #f5f8fc !important;
+  transform: translateZ(0);
+  will-change: transform;
+}
+.member-head {
+  z-index: 10;
+}
+.member-col {
+  z-index: 9;
+  box-shadow: 2px 0 0 #e9eef5;
+}
 .week-table thead th:first-child { width: 120px; min-width: 120px; }
-.member-col { background: #f5f8fc !important; }
+.week-table tbody th:first-child { width: 120px; min-width: 120px; }
 .table-date { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 .table-daytype { font-size: 11px; margin-top: 2px; }
 .table-weekend-off { background: #fff5f6 !important; }
@@ -237,11 +258,15 @@ h2 { margin: 0; font-size: 22px; }
 @media (max-width: 640px) {
   .app-wrap { padding: 14px; }
   .card { padding: 16px; border-radius: 14px; }
-  .hero-card { flex-direction: column; }
-  .hero-stats { width: 100%; }
+  .hero-card { flex-direction: column; align-items: center; }
+  .hero-title-wrap { justify-content: center; width: 100%; }
+  .hero-stats { width: 100%; display: flex; justify-content: center; }
   h1 { font-size: 28px; }
   h2 { font-size: 18px; }
   .week-table thead th:first-child { width: 90px; min-width: 90px; }
+  .member-head,
+  .member-col { width: 90px; min-width: 90px; max-width: 90px; }
+  .stat-box { text-align: center; }
   .weekdays-strip {
     grid-template-columns: 90px repeat(7, minmax(100px, 1fr));
     min-width: 790px;
