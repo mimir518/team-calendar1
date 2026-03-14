@@ -15,7 +15,8 @@ const statusOptions = [
 const statusMap = Object.fromEntries(statusOptions.map((s) => [s.value, s]))
 const weekdayNames = ['一', '二', '三', '四', '五', '六', '日']
 
-const holidayMap2026 = {
+const holidayMapByYear = {
+  2026: {
   '2026-01-01': '元旦',
   '2026-01-02': '元旦',
   '2026-01-03': '元旦',
@@ -45,16 +46,19 @@ const holidayMap2026 = {
   '2026-10-06': '国庆节',
   '2026-10-07': '国庆节',
   '2026-10-08': '国庆节',
+  },
 }
 
-const makeupWorkdays2026 = new Set([
-  '2026-02-14',
-  '2026-02-28',
-  '2026-04-04',
-  '2026-05-30',
-  '2026-09-27',
-  '2026-10-10',
-])
+const makeupWorkdaysByYear = {
+  2026: new Set([
+    '2026-02-14',
+    '2026-02-28',
+    '2026-04-04',
+    '2026-05-30',
+    '2026-09-27',
+    '2026-10-10',
+  ]),
+}
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -71,9 +75,12 @@ function isWeekend(date) {
 
 function getDayType(dateStr) {
   const dt = new Date(`${dateStr}T00:00:00`)
-  const holidayName = holidayMap2026[dateStr]
+  const targetYear = dt.getFullYear()
+  const holidayMap = holidayMapByYear[targetYear] || {}
+  const makeupWorkdays = makeupWorkdaysByYear[targetYear] || new Set()
+  const holidayName = holidayMap[dateStr]
   if (holidayName) return { type: 'holiday', label: holidayName }
-  if (makeupWorkdays2026.has(dateStr)) return { type: 'workday', label: '调休上班' }
+  if (makeupWorkdays.has(dateStr)) return { type: 'workday', label: '调休上班' }
   if (isWeekend(dt)) return { type: 'weekend', label: '周末' }
   return { type: 'workday', label: '工作日' }
 }
@@ -83,11 +90,11 @@ function getDefaultStatus(dateStr) {
   return dayType === 'holiday' || dayType === 'weekend' ? 'off' : 'office'
 }
 
-function normalizeChineseDate(month, day) {
-  return `2026-${pad(Number(month))}-${pad(Number(day))}`
+function normalizeChineseDate(month, day, year) {
+  return `${year}-${pad(Number(month))}-${pad(Number(day))}`
 }
 
-function parseAiCommand(input) {
+function parseAiCommand(input, year) {
   const text = input.trim()
   if (!text) return { ok: false, message: '请输入一句指令。' }
 
@@ -117,8 +124,8 @@ function parseAiCommand(input) {
       ok: true,
       member,
       status,
-      startDateStr: normalizeChineseDate(startMonth, startDay),
-      endDateStr: normalizeChineseDate(endMonth, endDay),
+      startDateStr: normalizeChineseDate(startMonth, startDay, year),
+      endDateStr: normalizeChineseDate(endMonth, endDay, year),
       summary: `${member} 从 ${Number(startMonth)}月${Number(startDay)}日 到 ${Number(endMonth)}月${Number(endDay)}日改为${statusMap[status].label}`,
     }
   }
@@ -130,8 +137,8 @@ function parseAiCommand(input) {
       ok: true,
       member,
       status,
-      startDateStr: normalizeChineseDate(month, startDay),
-      endDateStr: normalizeChineseDate(month, endDay),
+      startDateStr: normalizeChineseDate(month, startDay, year),
+      endDateStr: normalizeChineseDate(month, endDay, year),
       summary: `${member} 从 ${Number(month)}月${Number(startDay)}日 到 ${Number(month)}月${Number(endDay)}日改为${statusMap[status].label}`,
     }
   }
@@ -143,8 +150,8 @@ function parseAiCommand(input) {
       ok: true,
       member,
       status,
-      startDateStr: normalizeChineseDate(month, day),
-      endDateStr: normalizeChineseDate(month, day),
+      startDateStr: normalizeChineseDate(month, day, year),
+      endDateStr: normalizeChineseDate(month, day, year),
       summary: `${member} 在 ${Number(month)}月${Number(day)}日 改为${statusMap[status].label}`,
     }
   }
@@ -217,6 +224,7 @@ async function saveRangeOverride(member, startDateStr, endDateStr, status) {
 
 export default function App() {
   const today = new Date()
+  const currentYear = today.getFullYear()
   const todayStr = formatDate(today)
 
   const [overrides, setOverrides] = useState({})
@@ -225,6 +233,12 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState(null)
   const [weekOffset, setWeekOffset] = useState(0)
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [yearPickerOpen, setYearPickerOpen] = useState(false)
+
+  const yearOptions = useMemo(() => {
+    return Array.from({ length: 6 }, (_, idx) => currentYear - 1 + idx)
+  }, [currentYear])
 
   useEffect(() => {
     async function loadInitialData() {
@@ -244,9 +258,10 @@ export default function App() {
 
   const weekDates = useMemo(() => {
     const targetDate = new Date(today)
+    targetDate.setFullYear(selectedYear)
     targetDate.setDate(targetDate.getDate() + weekOffset * 7)
     return getWeekDates(targetDate)
-  }, [todayStr, weekOffset])
+  }, [todayStr, selectedYear, weekOffset])
 
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
@@ -282,7 +297,7 @@ export default function App() {
   }
 
   const applyAiCommand = async () => {
-    const parsed = parseAiCommand(aiInput)
+    const parsed = parseAiCommand(aiInput, selectedYear)
     if (!parsed.ok) {
       setAiFeedback(parsed.message)
       return
@@ -303,18 +318,35 @@ export default function App() {
     <div className="app-shell">
       <div className="app-wrap">
         <div className="hero-card card">
-          <div>
-            <h1>WPM Calendar 2026</h1>
+          <div className="hero-title-wrap">
+            <h1>WPM Calendar</h1>
           </div>
           <div className="hero-stats">
-            <div className="stat-box">
+            <button
+              type="button"
+              className="stat-box"
+              onClick={() => setYearPickerOpen((prev) => !prev)}
+            >
               <div className="stat-label">年份</div>
-              <div className="stat-value">2026</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-label">成员数</div>
-              <div className="stat-value">5</div>
-            </div>
+              {yearPickerOpen ? (
+                <select
+                  className="year-select"
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(Number(e.target.value))
+                    setWeekOffset(0)
+                    setYearPickerOpen(false)
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="stat-value">{selectedYear}</div>
+              )}
+            </button>
           </div>
         </div>
 
@@ -374,7 +406,10 @@ export default function App() {
                       const isToday = dateStr === todayStr
 
                       return (
-                        <th key={dateStr} className={`${dayType.type === 'holiday' ? 'table-holiday' : dayType.type === 'weekend' ? 'table-weekend' : ''} ${isToday ? 'table-today-col' : ''}`}>
+                        <th
+                          key={dateStr}
+                          className={`${dayType.type === 'holiday' || dayType.type === 'weekend' ? 'table-weekend-off' : ''} ${isToday ? 'table-today-col table-today-start' : ''}`}
+                        >
                           <div className="table-date">{`${date.getMonth() + 1}/${date.getDate()}`}</div>
                           <div className="table-daytype">{dayType.label}</div>
                         </th>
@@ -394,7 +429,10 @@ export default function App() {
                         const isToday = dateStr === todayStr
 
                         return (
-                          <td key={cellKey} className={isToday ? 'table-today-col' : ''}>
+                          <td
+                            key={cellKey}
+                            className={`${isToday ? 'table-today-col' : ''} ${isToday && member === members[members.length - 1] ? 'table-today-end' : ''}`}
+                          >
                             {isEditing ? (
                               <select
                                 autoFocus
