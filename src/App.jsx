@@ -2,6 +2,7 @@ import { supabase } from './lib/supabase'
 import React, { useEffect, useMemo, useState } from 'react'
 
 const members = ['Doris', 'Mary', 'Mark', 'Jerry', 'Helen']
+
 const statusOptions = [
   { value: 'office', label: '在公司', shortLabel: '在公司', className: 'status-office' },
   { value: 'ho', label: 'HO', shortLabel: 'HO', className: 'status-ho' },
@@ -12,51 +13,54 @@ const statusOptions = [
   { value: 'off-pm', label: '休假下午', shortLabel: '休下', className: 'status-off-dark' },
   { value: 'business', label: '出差', shortLabel: '出差', className: 'status-business' },
 ]
-const summaryStatuses = ['office', 'ho', 'off', 'business']
-const statusMap = Object.fromEntries(statusOptions.map((s) => [s.value, s]))
-const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
-const weekdayNames = ['日', '一', '二', '三', '四', '五', '六']
 
-const holidayMap2026 = {
-  '2026-01-01': '元旦',
-  '2026-01-02': '元旦',
-  '2026-01-03': '元旦',
-  '2026-02-15': '春节',
-  '2026-02-16': '春节',
-  '2026-02-17': '春节',
-  '2026-02-18': '春节',
-  '2026-02-19': '春节',
-  '2026-02-20': '春节',
-  '2026-02-21': '春节',
-  '2026-02-22': '春节',
-  '2026-02-23': '春节',
-  '2026-04-05': '清明节',
-  '2026-04-06': '清明节',
-  '2026-05-01': '劳动节',
-  '2026-05-02': '劳动节',
-  '2026-05-03': '劳动节',
-  '2026-05-31': '端午节',
-  '2026-06-01': '端午节',
-  '2026-09-25': '中秋节',
-  '2026-09-26': '中秋节',
-  '2026-10-01': '国庆节',
-  '2026-10-02': '国庆节',
-  '2026-10-03': '国庆节',
-  '2026-10-04': '国庆节',
-  '2026-10-05': '国庆节',
-  '2026-10-06': '国庆节',
-  '2026-10-07': '国庆节',
-  '2026-10-08': '国庆节',
+const statusMap = Object.fromEntries(statusOptions.map((s) => [s.value, s]))
+const weekdayNames = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+
+const holidayMapByYear = {
+  2026: {
+    '2026-01-01': '元旦',
+    '2026-01-02': '元旦',
+    '2026-01-03': '元旦',
+    '2026-02-15': '春节',
+    '2026-02-16': '春节',
+    '2026-02-17': '春节',
+    '2026-02-18': '春节',
+    '2026-02-19': '春节',
+    '2026-02-20': '春节',
+    '2026-02-21': '春节',
+    '2026-02-22': '春节',
+    '2026-02-23': '春节',
+    '2026-04-05': '清明节',
+    '2026-04-06': '清明节',
+    '2026-05-01': '劳动节',
+    '2026-05-02': '劳动节',
+    '2026-05-03': '劳动节',
+    '2026-05-31': '端午节',
+    '2026-06-01': '端午节',
+    '2026-09-25': '中秋节',
+    '2026-09-26': '中秋节',
+    '2026-10-01': '国庆节',
+    '2026-10-02': '国庆节',
+    '2026-10-03': '国庆节',
+    '2026-10-04': '国庆节',
+    '2026-10-05': '国庆节',
+    '2026-10-06': '国庆节',
+    '2026-10-07': '国庆节',
+    '2026-10-08': '国庆节',
+  },
 }
 
-const makeupWorkdays2026 = new Set([
-  '2026-02-14',
-  '2026-02-28',
-  '2026-04-04',
-  '2026-05-30',
-  '2026-09-27',
-  '2026-10-10',
-])
+const makeupWorkdaysByYear = {
+  2026: new Set([
+    '2026-02-14',
+    '2026-02-28',
+    '2026-04-04',
+    '2026-05-30',
+    '2026-09-27',
+    '2026-10-10',
+  ]),
+}
 
 function pad(n) {
   return String(n).padStart(2, '0')
@@ -73,9 +77,13 @@ function isWeekend(date) {
 
 function getDayType(dateStr) {
   const dt = new Date(`${dateStr}T00:00:00`)
-  const holidayName = holidayMap2026[dateStr]
+  const targetYear = dt.getFullYear()
+  const holidayMap = holidayMapByYear[targetYear] || {}
+  const makeupWorkdays = makeupWorkdaysByYear[targetYear] || new Set()
+  const holidayName = holidayMap[dateStr]
+
   if (holidayName) return { type: 'holiday', label: holidayName }
-  if (makeupWorkdays2026.has(dateStr)) return { type: 'workday', label: '调休上班' }
+  if (makeupWorkdays.has(dateStr)) return { type: 'workday', label: '调休上班' }
   if (isWeekend(dt)) return { type: 'weekend', label: '周末' }
   return { type: 'workday', label: '工作日' }
 }
@@ -85,24 +93,9 @@ function getDefaultStatus(dateStr) {
   return dayType === 'holiday' || dayType === 'weekend' ? 'off' : 'office'
 }
 
-function buildMonth(year, monthIndex) {
-  const first = new Date(year, monthIndex, 1)
-  const last = new Date(year, monthIndex + 1, 0)
-  const leading = first.getDay()
-  const days = []
-
-  for (let i = 0; i < leading; i += 1) days.push(null)
-  for (let day = 1; day <= last.getDate(); day += 1) {
-    days.push(new Date(year, monthIndex, day))
-  }
-  while (days.length % 7 !== 0) days.push(null)
-  return days
-}
-
-function normalizeChineseDate(month, day, year = 2026) {
+function normalizeChineseDate(month, day, year) {
   return `${year}-${pad(Number(month))}-${pad(Number(day))}`
 }
-
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -184,7 +177,9 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
   if (weekdayMatch) {
     const weekdayMap = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
     const weekday = weekdayMap[weekdayMatch[1]]
-    const range = quarter ? getQuarterDateRange(quarter, defaultYear) : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
+    const range = quarter
+      ? getQuarterDateRange(quarter, defaultYear)
+      : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
 
     return {
       temporalRule: {
@@ -200,12 +195,6 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
   return null
 }
 
-function collapseStatusForSummary(status) {
-  if (status.startsWith('ho')) return 'ho'
-  if (status.startsWith('off')) return 'off'
-  return status
-}
-
 function parseAiCommand(input, defaultYear = 2026) {
   const text = input.trim()
   if (!text) return { ok: false, message: '请输入一句指令。' }
@@ -213,11 +202,13 @@ function parseAiCommand(input, defaultYear = 2026) {
   const quarterMatch = text.match(/第?([一二三四1234])季度/)
   const fallbackQuarter = quarterMatch?.[1]
   const memberPattern = members.map(escapeRegExp).join('|')
+
   const clauses = text
     .split(/[，;。&]+/)
     .flatMap((segment) => segment.split(new RegExp(`\\s+(?=(?:${memberPattern})\\b)`, 'i')))
     .map((item) => item.trim())
     .filter(Boolean)
+
   const actions = []
 
   for (const clause of clauses) {
@@ -248,6 +239,7 @@ function parseAiCommand(input, defaultYear = 2026) {
 
   return { ok: true, actions }
 }
+
 function rowsToOverrides(rows) {
   const next = {}
   for (const row of rows || []) {
@@ -255,6 +247,23 @@ function rowsToOverrides(rows) {
     next[row.event_date][row.person_name] = row.status
   }
   return next
+}
+
+function getWeekDates(baseDate) {
+  const day = baseDate.getDay()
+  const offset = day === 0 ? -6 : 1 - day
+  const monday = new Date(baseDate)
+  monday.setDate(baseDate.getDate() + offset)
+
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + i)
+    return date
+  })
+}
+
+function getDaysInMonth(year, month) {
+  return new Date(year, month, 0).getDate()
 }
 
 async function fetchOverridesFromSupabase() {
@@ -298,7 +307,6 @@ async function saveRangeOverride(member, startDateStr, endDateStr, status) {
   }
 }
 
-
 async function saveTemporalRuleOverride(member, status, temporalRule) {
   if (temporalRule.type === 'date-range') {
     await saveRangeOverride(member, temporalRule.startDateStr, temporalRule.endDateStr, status)
@@ -320,18 +328,27 @@ async function saveTemporalRuleOverride(member, status, temporalRule) {
 }
 
 export default function App() {
-  const uiYear = 2026
-  const todayStr = formatDate(new Date())
-  const initialMonth = todayStr.startsWith(`${uiYear}-`) ? Number(todayStr.slice(5, 7)) - 1 : 2
-  const initialDate = todayStr.startsWith(`${uiYear}-`) ? todayStr : `${uiYear}-03-11`
+  const today = new Date()
+  const currentYear = today.getFullYear()
+  const todayStr = formatDate(today)
 
-  const [selectedMonth, setSelectedMonth] = useState(initialMonth)
-  const [selectedDate, setSelectedDate] = useState(initialDate)
   const [overrides, setOverrides] = useState({})
-  const [selectedMember, setSelectedMember] = useState(members[0])
   const [aiInput, setAiInput] = useState('Doris从3月23号到3月31号休假')
   const [aiFeedback, setAiFeedback] = useState('')
   const [loading, setLoading] = useState(true)
+  const [editingCell, setEditingCell] = useState(null)
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [yearPickerOpen, setYearPickerOpen] = useState(false)
+
+  const thisWeekMonday = useMemo(() => getWeekDates(today)[0], [todayStr])
+  const [weekAnchorDate, setWeekAnchorDate] = useState(thisWeekMonday)
+  const [jumpMonth, setJumpMonth] = useState(thisWeekMonday.getMonth() + 1)
+  const [jumpDay, setJumpDay] = useState(thisWeekMonday.getDate())
+
+  const yearOptions = useMemo(() => {
+    return Array.from({ length: 6 }, (_, idx) => currentYear - 1 + idx)
+  }, [currentYear])
 
   useEffect(() => {
     async function loadInitialData() {
@@ -349,32 +366,38 @@ export default function App() {
     loadInitialData()
   }, [])
 
-  const monthDays = useMemo(() => buildMonth(uiYear, selectedMonth), [selectedMonth, uiYear])
-  const selectedDayType = getDayType(selectedDate)
+  const weekDates = useMemo(() => {
+    const targetDate = new Date(weekAnchorDate)
+    targetDate.setDate(targetDate.getDate() + weekOffset * 7)
+    return getWeekDates(targetDate)
+  }, [weekAnchorDate, weekOffset])
 
-  const selectedStatuses = useMemo(() => {
-    const dayOverrides = overrides[selectedDate] || {}
-    return Object.fromEntries(
-      members.map((member) => [member, dayOverrides[member] || getDefaultStatus(selectedDate)])
-    )
-  }, [overrides, selectedDate])
+  const dayOptions = useMemo(() => {
+    const daysInMonth = getDaysInMonth(selectedYear, jumpMonth)
+    return Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
+  }, [selectedYear, jumpMonth])
 
-  const summary = useMemo(() => {
-    const counts = { office: 0, ho: 0, off: 0, business: 0 }
-    members.forEach((m) => {
-      counts[collapseStatusForSummary(selectedStatuses[m])] += 1
-    })
-    return counts
-  }, [selectedStatuses])
+  useEffect(() => {
+    if (!dayOptions.includes(jumpDay)) {
+      setJumpDay(dayOptions[dayOptions.length - 1])
+    }
+  }, [dayOptions, jumpDay])
+
+  useEffect(() => {
+    const targetDate = new Date(selectedYear, jumpMonth - 1, jumpDay)
+    setWeekAnchorDate(targetDate)
+    setWeekOffset(0)
+  }, [selectedYear, jumpMonth, jumpDay])
 
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
-  const updateMemberStatus = async (member, nextStatus) => {
+  const updateMemberStatus = async (member, dateStr, nextStatus) => {
     try {
-      await saveOneOverride(selectedDate, member, nextStatus)
+      await saveOneOverride(dateStr, member, nextStatus)
       const nextOverrides = await fetchOverridesFromSupabase()
       setOverrides(nextOverrides)
-      setAiFeedback(`${member} 在 ${selectedDate} 已更新为 ${statusMap[nextStatus].label}`)
+      setAiFeedback(`${member} 在 ${dateStr} 已更新为 ${statusMap[nextStatus].label}`)
+      setEditingCell(null)
     } catch (error) {
       console.error('Failed to update member status', error)
       setAiFeedback('保存失败，请稍后重试。')
@@ -392,6 +415,7 @@ export default function App() {
 
       setOverrides({})
       setAiFeedback('已清空所有自定义状态，恢复默认规则。')
+      setEditingCell(null)
     } catch (error) {
       console.error('Failed to reset data', error)
       setAiFeedback('清空失败，请稍后重试。')
@@ -399,7 +423,7 @@ export default function App() {
   }
 
   const applyAiCommand = async () => {
-    const parsed = parseAiCommand(aiInput, uiYear)
+    const parsed = parseAiCommand(aiInput, selectedYear)
     if (!parsed.ok) {
       setAiFeedback(parsed.message)
       return
@@ -414,10 +438,6 @@ export default function App() {
 
       const nextOverrides = await fetchOverridesFromSupabase()
       setOverrides(nextOverrides)
-      const firstAction = parsed.actions[0]
-      setSelectedDate(firstAction.temporalRule.startDateStr)
-      setSelectedMember(firstAction.members[0])
-      setSelectedMonth(Number(firstAction.temporalRule.startDateStr.slice(5, 7)) - 1)
       setAiFeedback(`已更新：${parsed.actions.map((item) => item.summary).join('；')}`)
     } catch (error) {
       console.error('Failed to apply AI command', error)
@@ -429,181 +449,165 @@ export default function App() {
     <div className="app-shell">
       <div className="app-wrap">
         <div className="hero-card card">
-          <div>
-            <div className="eyebrow">MVP Preview</div>
-            <h1>Team Status Calendar 2026</h1>
-            <p className="subtle">
-              组员：Doris、Mary、Mark、Jerry、Helen。默认按 2026 年中国工作日 / 周末 / 公共假期自动填充，支持手动改单人状态、半天 HO/休假，以及一句话 AI 录入。
-            </p>
+          <div className="hero-title-wrap">
+            <h1>WPM 团队日历</h1>
           </div>
           <div className="hero-stats">
-            <div className="stat-box">
-              <div className="stat-label">年份</div>
-              <div className="stat-value">2026</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-label">成员数</div>
-              <div className="stat-value">5</div>
-            </div>
+            <button
+              type="button"
+              className="stat-box"
+              onClick={() => setYearPickerOpen((prev) => !prev)}
+            >
+              {yearPickerOpen ? (
+                <select
+                  className="year-select"
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(Number(e.target.value))
+                    setWeekOffset(0)
+                    setYearPickerOpen(false)
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="stat-value">{selectedYear}</div>
+              )}
+            </button>
           </div>
         </div>
 
         <div className="card section-card">
           <div className="ai-box">
-            <div className="row between wrap gap-12">
-              <div>
-                <h2>AI 快速录入</h2>
-                <p className="subtle">输入一句话，自动识别人员、日期和状态并更新日历。</p>
-              </div>
-              <div className="mini-tip">示例：Doris从3月23号到3月31号休假</div>
-            </div>
-
-            <div className="row wrap gap-12 top-gap">
+            <div className="row wrap gap-12 ai-inline-row">
+              <h2>AI 快速录入</h2>
               <input
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
                 placeholder="例如：Mary 4月8号HO上午"
                 className="text-input"
               />
-              <button onClick={applyAiCommand} className="primary-btn">AI 更新日历</button>
-              <button onClick={resetAllData} className="ghost-btn">清空自定义数据</button>
+              <button onClick={applyAiCommand} className="primary-btn">更新</button>
+              <button onClick={resetAllData} className="secondary-btn">清空</button>
             </div>
             {aiFeedback ? <div className="feedback">{aiFeedback}</div> : null}
           </div>
-
-          <div className="row between wrap gap-12">
-            <div>
-              <h2>当日摘要</h2>
-              <p className="subtle">{selectedDate} · {selectedDayType.label}</p>
-            </div>
-            <div className={`pill ${selectedDayType.type === 'holiday' ? 'pill-holiday' : selectedDayType.type === 'weekend' ? 'pill-weekend' : 'pill-workday'}`}>
-              默认：{getDefaultStatus(selectedDate) === 'off' ? '休假' : '在公司'}
-            </div>
-          </div>
-
-          <div className="summary-grid">
-            {summaryStatuses.map((key) => (
-              <div key={key} className="summary-card">
-                <div className="stat-label">{statusMap[key].label}</div>
-                <div className="summary-value">{summary[key]}</div>
-              </div>
-            ))}
-          </div>
         </div>
 
-        <div className="main-grid">
-          <section className="card">
-            <div className="row between wrap gap-12 section-head">
-              <div>
-                <h2>年度日历</h2>
-                <p className="subtle">当前显示 {selectedMember} 在这个月每天的状态，状态会直接标在日历格里。</p>
-              </div>
-              <div className="row wrap gap-12">
-                <div className="member-pill">当前成员：{selectedMember}</div>
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="select-input">
-                  {monthNames.map((month, idx) => (
-                    <option key={month} value={idx}>{month}</option>
+        <section className="card weekly-card">
+          <div className="row between wrap gap-12 section-head">
+            <div>
+              <h2>每周安排</h2>
+              <p className="subtle">点击单元格即可下拉修改状态。手机端可左右滑动查看整周。</p>
+            </div>
+            <div className="week-nav-cards">
+              <div className="week-jump-card">
+                <select
+                  className="week-jump-select"
+                  value={jumpMonth}
+                  onChange={(e) => setJumpMonth(Number(e.target.value))}
+                >
+                  {Array.from({ length: 12 }, (_, idx) => idx + 1).map((month) => (
+                    <option key={month} value={month}>{`${month}月`}</option>
+                  ))}
+                </select>
+                <select
+                  className="week-jump-select"
+                  value={jumpDay}
+                  onChange={(e) => setJumpDay(Number(e.target.value))}
+                >
+                  {dayOptions.map((day) => (
+                    <option key={day} value={day}>{`${day}日`}</option>
                   ))}
                 </select>
               </div>
+              <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev - 1)}>{'<'}</button>
+              <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev + 1)}>{'>'}</button>
             </div>
+          </div>
 
-            {loading ? (
-              <div className="subtle" style={{ padding: '20px 0' }}>正在读取云端数据...</div>
-            ) : (
-              <>
-                <div className="weekday-grid">
-                  {weekdayNames.map((name) => <div key={name}>{name}</div>)}
-                </div>
-
-                <div className="calendar-grid">
-                  {monthDays.map((date, idx) => {
-                    if (!date) return <div key={`empty-${idx}`} className="calendar-empty" />
-                    const dateStr = formatDate(date)
-                    const dayType = getDayType(dateStr)
-                    const isSelected = dateStr === selectedDate
-                    const isToday = dateStr === todayStr
-                    const status = getStatusForDate(dateStr, selectedMember)
-
-                    let className = 'calendar-cell'
-                    if (dayType.type === 'holiday') className += ' calendar-holiday'
-                    else if (dayType.type === 'weekend') className += ' calendar-weekend'
-                    if (isSelected) className += ' calendar-selected'
-                    if (isToday) className += ' calendar-today'
-
-                    return (
-                      <button key={dateStr} className={className} onClick={() => setSelectedDate(dateStr)}>
-                        <div className="cell-top">
-                          <div className="row gap-8 align-center">
-                            <span className="date-number">{date.getDate()}</span>
-                            {isToday ? <span className="today-tag">今天</span> : null}
-                          </div>
-                        </div>
-                        <div className="cell-bottom">
-                          <div className="daytype-text">{dayType.label}</div>
-                          <div className={`status-badge ${statusMap[status].className}`}>{statusMap[status].shortLabel}</div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-          </section>
-
-          <aside className="side-stack">
-            <section className="card">
-              <div className="row between wrap gap-12">
-                <div>
-                  <h2>状态编辑</h2>
-                  <p className="subtle">{selectedDate} · {selectedDayType.label}</p>
-                </div>
-                <div className="pill">可手动改单人状态</div>
+          {loading ? (
+            <div className="subtle" style={{ padding: '20px 0' }}>正在读取云端数据...</div>
+          ) : (
+            <div className="week-table-wrap">
+              <div className="weekdays-strip">
+                <div className="weekday-member-placeholder" />
+                {weekDates.map((date, idx) => (
+                  <div key={`weekday-${formatDate(date)}`} className="weekday-label">{weekdayNames[idx]}</div>
+                ))}
               </div>
 
-              <div className="editor-stack">
-                {members.map((member) => {
-                  const current = selectedStatuses[member]
-                  const isActive = selectedMember === member
-                  return (
-                    <div key={member} className={`member-card ${isActive ? 'member-card-active' : ''}`}>
-                      <div className="row between gap-12">
-                        <button className={`member-name ${isActive ? 'member-name-active' : ''}`} onClick={() => setSelectedMember(member)}>
-                          {member}
-                        </button>
-                        <div className={`status-badge ${statusMap[current].className}`}>{statusMap[current].label}</div>
-                      </div>
+              <table className="week-table">
+                <thead>
+                  <tr>
+                    <th className="member-head">成员</th>
+                    {weekDates.map((date) => {
+                      const dateStr = formatDate(date)
+                      const dayType = getDayType(dateStr)
+                      const isToday = dateStr === todayStr
 
-                      <div className="status-grid">
-                        {statusOptions.map((option) => (
-                          <button
-                            key={option.value}
-                            onClick={() => updateMemberStatus(member, option.value)}
-                            className={`status-option ${option.className} ${current === option.value ? 'status-option-active' : ''}`}
+                      return (
+                        <th
+                          key={dateStr}
+                          className={`${dayType.type === 'holiday' || dayType.type === 'weekend' ? 'table-weekend-off' : ''} ${isToday ? 'table-today-col table-today-start' : ''}`}
+                        >
+                          <div className="table-date">{`${date.getMonth() + 1}/${date.getDate()}`}</div>
+                          <div className="table-daytype">{dayType.label}</div>
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member, memberIndex) => (
+                    <tr key={member}>
+                      <th className="member-col">{member}</th>
+                      {weekDates.map((date) => {
+                        const dateStr = formatDate(date)
+                        const status = getStatusForDate(dateStr, member)
+                        const cellKey = `${member}-${dateStr}`
+                        const isEditing = editingCell === cellKey
+                        const isToday = dateStr === todayStr
+                        const isLastMember = memberIndex === members.length - 1
+
+                        return (
+                          <td
+                            key={cellKey}
+                            className={`${isToday ? 'table-today-col' : ''} ${isToday && isLastMember ? 'table-today-end' : ''}`}
                           >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-
-            <section className="card">
-              <h2>半天状态展示说明</h2>
-              <div className="notes">
-                <p>• HO 上午：显示为「HO上」</p>
-                <p>• HO 下午：显示为「HO下」</p>
-                <p>• 休假上午：显示为「休上」</p>
-                <p>• 休假下午：显示为「休下」</p>
-                <p>• 日历格中直接显示状态文字，比小圆点更容易看清。</p>
-                <p>• 当前版本已接 Supabase，跨设备可共享修改结果。</p>
-              </div>
-            </section>
-          </aside>
-        </div>
+                            {isEditing ? (
+                              <select
+                                autoFocus
+                                className="table-select"
+                                value={status}
+                                onChange={(e) => updateMemberStatus(member, dateStr, e.target.value)}
+                                onBlur={() => setEditingCell(null)}
+                              >
+                                {statusOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <button
+                                className={`table-status ${statusMap[status].className}`}
+                                onClick={() => setEditingCell(cellKey)}
+                              >
+                                {statusMap[status].shortLabel}
+                              </button>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )
