@@ -258,7 +258,7 @@ function getStatusMeta(status) {
     value: status,
     label: parts.map((part) => part.label).join(' + '),
     shortLabel: parts.map((part) => part.shortLabel).join('+'),
-    className: 'status-mixed',
+    className: parts[0].className,
   }
 }
 
@@ -470,7 +470,7 @@ export default function App() {
       setSelectedDate(firstAction.temporalRule.startDateStr)
       setSelectedMember(firstAction.members[0])
       setSelectedMonth(Number(firstAction.temporalRule.startDateStr.slice(5, 7)) - 1)
-      setAiFeedback(`已更新：${parsed.actions.map((item) => item.summary).join('；')}（节假日默认休假不会被 AI 改成非休假状态）`)
+      setAiFeedback(`已更新：${parsed.actions.map((item) => item.summary).join('；')}`)
     } catch (error) {
       console.error('Failed to apply AI command', error)
       setAiFeedback('AI 更新失败，请稍后重试。')
