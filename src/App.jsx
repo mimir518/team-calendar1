@@ -338,28 +338,50 @@ async function fetchOverridesFromSupabase() {
   return rowsToOverrides(data)
 }
 
-async function saveOneOverride(dateStr, member, status) {
-  const defaultStatus = getDefaultStatus(dateStr)
+async function saveOverrides(entries) {
+  const dedupedEntries = new Map()
 
-  if (status === defaultStatus) {
+  for (const entry of entries) {
+    const key = `${entry.member}::${entry.dateStr}`
+    dedupedEntries.set(key, entry)
+  }
+
+  const deleteDatesByMember = new Map()
+  const upsertRows = []
+
+  for (const { dateStr, member, status } of dedupedEntries.values()) {
+    const defaultStatus = getDefaultStatus(dateStr)
+
+    if (status === defaultStatus) {
+      if (!deleteDatesByMember.has(member)) deleteDatesByMember.set(member, [])
+      deleteDatesByMember.get(member).push(dateStr)
+      continue
+    }
+
+    upsertRows.push({ person_name: member, event_date: dateStr, status })
+  }
+
+  for (const [member, dateList] of deleteDatesByMember.entries()) {
     const { error: deleteError } = await supabase
       .from('calendar_events')
       .delete()
-      .eq('event_date', dateStr)
       .eq('person_name', member)
+      .in('event_date', [...new Set(dateList)])
 
     if (deleteError) throw deleteError
-    return
   }
 
-  const person_name = member
-  const event_date = dateStr
+  if (upsertRows.length) {
+    const { error: upsertError } = await supabase
+      .from('calendar_events')
+      .upsert(upsertRows, { onConflict: 'person_name,event_date' })
 
-  const { error: upsertError } = await supabase
-    .from('calendar_events')
-    .upsert([{ person_name, event_date, status }], { onConflict: 'person_name,event_date' })
+    if (upsertError) throw upsertError
+  }
+}
 
-  if (upsertError) throw upsertError
+async function saveOneOverride(dateStr, member, status) {
+  await saveOverrides([{ dateStr, member, status }])
 }
 
 async function saveRangeOverride(member, startDateStr, endDateStr, status) {
@@ -569,6 +591,13 @@ export default function App() {
     try {
       const currentStatus = getStatusForDate(dateStr, member)
       const finalStatus = getFinalStatusBySource(currentStatus, nextStatus, dateStr, 'manual')
+
+      if (finalStatus === currentStatus) {
+        setAiFeedback(`${member} 在 ${dateStr} 状态无变化`)
+        setEditingCell(null)
+        return
+      }
+
       await saveOneOverride(dateStr, member, finalStatus)
       setOverrides((prev) => putStatusToMap(dateStr, member, finalStatus, prev))
       scheduleSilentRefresh()
@@ -607,16 +636,25 @@ export default function App() {
 
     try {
       let draftOverrides = { ...overrides }
+      const pendingWrites = []
+
       for (const action of parsed.actions) {
         for (const member of action.members) {
           const dateList = getDateStringsFromTemporalRule(action.temporalRule)
           for (const dateStr of dateList) {
             const currentStatus = getStatusFromMap(dateStr, member, draftOverrides)
             const finalStatus = getFinalStatusBySource(currentStatus, action.status, dateStr, 'ai')
-            await saveOneOverride(dateStr, member, finalStatus)
+
+            if (finalStatus === currentStatus) continue
+
+            pendingWrites.push({ dateStr, member, status: finalStatus })
             draftOverrides = putStatusToMap(dateStr, member, finalStatus, draftOverrides)
           }
         }
+      }
+
+      if (pendingWrites.length) {
+        await saveOverrides(pendingWrites)
       }
 
       setOverrides(draftOverrides)
