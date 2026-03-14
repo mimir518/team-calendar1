@@ -350,6 +350,50 @@ function chunkArray(items, batchSize = 200) {
   return chunks
 }
 
+function isUpsertConflictTargetError(error) {
+  const message = String(error?.message || '')
+  const details = String(error?.details || '')
+  return (
+    error?.code === '42P10'
+    || /no unique|no exclusion|on conflict/i.test(message)
+    || /no unique|no exclusion|on conflict/i.test(details)
+  )
+}
+
+async function replaceRowsInBatches(rows, batchSize = 200) {
+  if (!rows.length) return
+
+  const deleteDateMapByMember = new Map()
+  for (const row of rows) {
+    if (!deleteDateMapByMember.has(row.person_name)) {
+      deleteDateMapByMember.set(row.person_name, new Set())
+    }
+    deleteDateMapByMember.get(row.person_name).add(row.event_date)
+  }
+
+  for (const [member, dateSet] of deleteDateMapByMember.entries()) {
+    const dateChunks = chunkArray([...dateSet], batchSize)
+    for (const dateChunk of dateChunks) {
+      const { error } = await supabase
+        .from('calendar_events')
+        .delete()
+        .eq('person_name', member)
+        .in('event_date', dateChunk)
+
+      if (error) throw error
+    }
+  }
+
+  const insertChunks = chunkArray(rows, batchSize)
+  for (const chunk of insertChunks) {
+    const { error } = await supabase
+      .from('calendar_events')
+      .insert(chunk)
+
+    if (error) throw error
+  }
+}
+
 async function saveOverridesBatch(overrides) {
   const dedupedMap = new Map()
 
@@ -397,7 +441,13 @@ async function saveOverridesBatch(overrides) {
       .from('calendar_events')
       .upsert(chunk, { onConflict: 'person_name,event_date' })
 
-    if (error) throw error
+    if (error) {
+      if (isUpsertConflictTargetError(error)) {
+        await replaceRowsInBatches(chunk, 200)
+        continue
+      }
+      throw error
+    }
   }
 }
 
