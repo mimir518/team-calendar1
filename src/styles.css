@@ -73,10 +73,13 @@ h2 { margin: 0; font-size: 22px; }
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px;
+  position: relative;
 }
 
 .ai-inline-row {
   align-items: center;
+  padding-right: 48px;
+  flex-wrap: nowrap;
 }
 .ai-inline-row h2 {
   font-size: 18px;
@@ -103,6 +106,46 @@ h2 { margin: 0; font-size: 22px; }
   border: 1px solid var(--line);
 }
 .feedback { margin-top: 12px; color: #0369a1; font-size: 14px; }
+
+.menu-wrap {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.menu-trigger {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-weight: 700;
+  cursor: pointer;
+}
+.menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 170px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  z-index: 20;
+  overflow: hidden;
+}
+.menu-item {
+  width: 100%;
+  border: none;
+  background: #fff;
+  text-align: left;
+  padding: 10px 12px;
+  color: #0f172a;
+  cursor: pointer;
+}
+.menu-item:hover {
+  background: #f8fafc;
+}
 .pill, .status-badge {
   display: inline-flex;
   align-items: center;
@@ -160,6 +203,10 @@ h2 { margin: 0; font-size: 22px; }
   font-weight: 700;
   color: #334155;
   cursor: pointer;
+}
+.week-nav-today {
+  font-size: 11px;
+  font-weight: 600;
 }
 .weekdays-strip {
   display: grid;
@@ -272,4 +319,47 @@ h2 { margin: 0; font-size: 22px; }
     min-width: 790px;
   }
   .week-table { min-width: 790px; }
+
+  .ai-inline-row {
+    gap: 8px;
+  }
+  .ai-inline-row h2 {
+    font-size: 16px;
+  }
+  .text-input {
+    min-width: 110px;
+    padding: 9px 10px;
+  }
+  .primary-btn {
+    padding: 9px 12px;
+  }
+}
+
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  padding: 20px;
+}
+.confirm-modal {
+  width: min(420px, 100%);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+}
+.confirm-modal p {
+  margin: 0;
+  font-size: 16px;
+}
+.confirm-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

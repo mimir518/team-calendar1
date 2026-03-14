@@ -1,5 +1,5 @@
 import { supabase } from './lib/supabase'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 const members = ['Doris', 'Mary', 'Mark', 'Jerry', 'Helen']
 
@@ -333,13 +333,16 @@ export default function App() {
   const todayStr = formatDate(today)
 
   const [overrides, setOverrides] = useState({})
-  const [aiInput, setAiInput] = useState('Doris从3月23号到3月31号休假')
+  const [aiInput, setAiInput] = useState('')
   const [aiFeedback, setAiFeedback] = useState('')
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState(null)
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [yearPickerOpen, setYearPickerOpen] = useState(false)
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const actionMenuRef = useRef(null)
 
   const thisWeekMonday = useMemo(() => getWeekDates(today)[0], [todayStr])
   const [weekAnchorDate, setWeekAnchorDate] = useState(thisWeekMonday)
@@ -388,6 +391,19 @@ export default function App() {
     setWeekAnchorDate(targetDate)
     setWeekOffset(0)
   }, [selectedYear, jumpMonth, jumpDay])
+
+  useEffect(() => {
+    if (!actionMenuOpen) return
+
+    const handleClickOutside = (event) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+        setActionMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [actionMenuOpen])
 
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
@@ -445,12 +461,30 @@ export default function App() {
     }
   }
 
+  const goToCurrentWeek = () => {
+    setSelectedYear(currentYear)
+    setJumpMonth(today.getMonth() + 1)
+    setJumpDay(today.getDate())
+    setWeekAnchorDate(thisWeekMonday)
+    setWeekOffset(0)
+  }
+
+  const openResetConfirm = () => {
+    setActionMenuOpen(false)
+    setShowResetConfirm(true)
+  }
+
+  const handleConfirmReset = async () => {
+    await resetAllData()
+    setShowResetConfirm(false)
+  }
+
   return (
     <div className="app-shell">
       <div className="app-wrap">
         <div className="hero-card card">
           <div className="hero-title-wrap">
-            <h1>WPM 团队日历</h1>
+            <h1>WPM Calendar</h1>
           </div>
           <div className="hero-stats">
             <button
@@ -482,8 +516,25 @@ export default function App() {
 
         <div className="card section-card">
           <div className="ai-box">
-            <div className="row wrap gap-12 ai-inline-row">
+            <div className="row gap-12 ai-inline-row">
               <h2>AI 快速录入</h2>
+              <div className="menu-wrap" ref={actionMenuRef}>
+                <button
+                  type="button"
+                  className="menu-trigger"
+                  onClick={() => setActionMenuOpen((prev) => !prev)}
+                  aria-label="更多操作"
+                >
+                  ...
+                </button>
+                {actionMenuOpen ? (
+                  <div className="menu-dropdown">
+                    <button type="button" className="menu-item" onClick={openResetConfirm}>
+                      清空所有自定义状态
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <input
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
@@ -491,7 +542,6 @@ export default function App() {
                 className="text-input"
               />
               <button onClick={applyAiCommand} className="primary-btn">更新</button>
-              <button onClick={resetAllData} className="secondary-btn">清空</button>
             </div>
             {aiFeedback ? <div className="feedback">{aiFeedback}</div> : null}
           </div>
@@ -501,7 +551,6 @@ export default function App() {
           <div className="row between wrap gap-12 section-head">
             <div>
               <h2>每周安排</h2>
-              <p className="subtle">点击单元格即可下拉修改状态。手机端可左右滑动查看整周。</p>
             </div>
             <div className="week-nav-cards">
               <div className="week-jump-card">
@@ -525,6 +574,7 @@ export default function App() {
                 </select>
               </div>
               <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev - 1)}>{'<'}</button>
+              <button className="week-nav-card week-nav-today" onClick={goToCurrentWeek}>今天</button>
               <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev + 1)}>{'>'}</button>
             </div>
           </div>
@@ -608,6 +658,18 @@ export default function App() {
             </div>
           )}
         </section>
+
+        {showResetConfirm ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="confirm-modal">
+              <p>确认要清空所有自定义状态吗？</p>
+              <div className="confirm-actions">
+                <button type="button" className="primary-btn" onClick={handleConfirmReset}>是</button>
+                <button type="button" className="ghost-btn" onClick={() => setShowResetConfirm(false)}>否</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )
