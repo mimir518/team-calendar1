@@ -435,6 +435,8 @@ export default function App() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const actionMenuRef = useRef(null)
+  const lastSilentRefreshAtRef = useRef(0)
+  const silentRefreshTimerRef = useRef(null)
 
   const thisWeekMonday = useMemo(() => getWeekDates(today)[0], [todayStr])
   const [weekAnchorDate, setWeekAnchorDate] = useState(thisWeekMonday)
@@ -459,6 +461,12 @@ export default function App() {
     }
 
     loadInitialData()
+
+    return () => {
+      if (silentRefreshTimerRef.current) {
+        clearTimeout(silentRefreshTimerRef.current)
+      }
+    }
   }, [])
 
   const weekDates = useMemo(() => {
@@ -501,6 +509,18 @@ export default function App() {
 
   const getStatusFromMap = (dateStr, member, sourceMap) => sourceMap[dateStr]?.[member] || getDefaultStatus(dateStr)
 
+  const fetchAndSyncOverrides = async (errorMessage) => {
+    try {
+      const nextOverrides = await fetchOverridesFromSupabase()
+      setOverrides(nextOverrides)
+      return true
+    } catch (error) {
+      console.error('Failed to sync overrides from Supabase', error)
+      if (errorMessage) setAiFeedback(errorMessage)
+      return false
+    }
+  }
+
   const putStatusToMap = (dateStr, member, status, sourceMap) => {
     const next = { ...sourceMap }
     const dayMap = { ...(next[dateStr] || {}) }
@@ -525,18 +545,34 @@ export default function App() {
     return resolveNextStatus(currentStatus, requestedStatus)
   }
 
+  const scheduleSilentRefresh = () => {
+    const SILENT_REFRESH_MIN_INTERVAL = 30000
+    const now = Date.now()
+    if (now - lastSilentRefreshAtRef.current < SILENT_REFRESH_MIN_INTERVAL) return
+
+    if (silentRefreshTimerRef.current) {
+      clearTimeout(silentRefreshTimerRef.current)
+    }
+
+    silentRefreshTimerRef.current = setTimeout(async () => {
+      lastSilentRefreshAtRef.current = Date.now()
+      await fetchAndSyncOverrides()
+      silentRefreshTimerRef.current = null
+    }, 1500)
+  }
+
   const updateMemberStatus = async (member, dateStr, nextStatus) => {
     try {
       const currentStatus = getStatusForDate(dateStr, member)
       const finalStatus = getFinalStatusBySource(currentStatus, nextStatus, dateStr, 'manual')
       await saveOneOverride(dateStr, member, finalStatus)
-      const nextOverrides = await fetchOverridesFromSupabase()
-      setOverrides(nextOverrides)
+      setOverrides((prev) => putStatusToMap(dateStr, member, finalStatus, prev))
+      scheduleSilentRefresh()
       setAiFeedback(`${member} 在 ${dateStr} 已更新为 ${getStatusMeta(finalStatus).label}`)
       setEditingCell(null)
     } catch (error) {
       console.error('Failed to update member status', error)
-      setAiFeedback('保存失败，请稍后重试。')
+      await fetchAndSyncOverrides('保存失败，请稍后重试。')
     }
   }
 
@@ -579,13 +615,19 @@ export default function App() {
         }
       }
 
-      const nextOverrides = await fetchOverridesFromSupabase()
-      setOverrides(nextOverrides)
+      setOverrides(draftOverrides)
+      scheduleSilentRefresh()
       setAiFeedback(`已更新：${parsed.actions.map((item) => item.summary).join('；')}`)
     } catch (error) {
       console.error('Failed to apply AI command', error)
-      setAiFeedback('AI 更新失败，请稍后重试。')
+      await fetchAndSyncOverrides('AI 更新失败，请稍后重试。')
     }
+  }
+
+  const handleManualRefresh = async () => {
+    setActionMenuOpen(false)
+    const refreshed = await fetchAndSyncOverrides('刷新失败，请稍后重试。')
+    if (refreshed) setAiFeedback('已从云端刷新最新数据。')
   }
 
   const goToCurrentWeek = () => {
@@ -656,6 +698,9 @@ export default function App() {
                 </button>
                 {actionMenuOpen ? (
                   <div className="menu-dropdown">
+                    <button type="button" className="menu-item" onClick={handleManualRefresh}>
+                      手动刷新云端数据
+                    </button>
                     <button type="button" className="menu-item" onClick={openResetConfirm}>
                       清空所有自定义状态
                     </button>
