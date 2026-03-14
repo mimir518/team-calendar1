@@ -344,7 +344,7 @@ export default function App() {
       <div className="app-wrap">
         <div className="hero-card card">
           <div className="hero-title-wrap">
-            <h1>WPM团队日历</h1>
+            <h1>WPM Calendar</h1>
           </div>
           <div className="hero-stats">
             <button
