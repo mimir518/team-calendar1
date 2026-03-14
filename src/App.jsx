@@ -14,6 +14,7 @@ const statusOptions = [
 ]
 const summaryStatuses = ['office', 'ho', 'off', 'business']
 const statusMap = Object.fromEntries(statusOptions.map((s) => [s.value, s]))
+const halfDayStatuses = new Set(['ho-am', 'ho-pm', 'off-am', 'off-pm'])
 const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
 const weekdayNames = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -201,9 +202,68 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
 }
 
 function collapseStatusForSummary(status) {
+  if (status.includes('+')) {
+    if (status.includes('off-')) return 'off'
+    if (status.includes('ho-')) return 'ho'
+  }
   if (status.startsWith('ho')) return 'ho'
   if (status.startsWith('off')) return 'off'
   return status
+}
+
+function getStatusParts(status) {
+  return status.split('+').filter(Boolean)
+}
+
+function isHalfDayStatus(status) {
+  return halfDayStatuses.has(status)
+}
+
+function getHalfDaySlot(status) {
+  if (status.endsWith('-am')) return 'am'
+  if (status.endsWith('-pm')) return 'pm'
+  return null
+}
+
+function combineHalfDayStatuses(parts) {
+  const ordered = [...new Set(parts)].sort((a, b) => {
+    const order = { am: 0, pm: 1 }
+    return order[getHalfDaySlot(a)] - order[getHalfDaySlot(b)]
+  })
+  if (ordered.length === 1) return ordered[0]
+  return ordered.join('+')
+}
+
+function resolveNextStatus(currentStatus, nextStatus) {
+  if (!isHalfDayStatus(nextStatus)) return nextStatus
+
+  const currentParts = getStatusParts(currentStatus)
+  const currentHalfParts = currentParts.filter((part) => isHalfDayStatus(part))
+  if (!currentHalfParts.length) return nextStatus
+
+  const nextSlot = getHalfDaySlot(nextStatus)
+  const oppositePart = currentHalfParts.find((part) => getHalfDaySlot(part) !== nextSlot)
+  if (!oppositePart) return nextStatus
+
+  return combineHalfDayStatuses([nextStatus, oppositePart])
+}
+
+function getStatusMeta(status) {
+  if (statusMap[status]) return statusMap[status]
+
+  const parts = getStatusParts(status).map((part) => statusMap[part]).filter(Boolean)
+  if (!parts.length) return statusMap.office
+
+  return {
+    value: status,
+    label: parts.map((part) => part.label).join(' + '),
+    shortLabel: parts.map((part) => part.shortLabel).join('+'),
+    className: 'status-mixed',
+  }
+}
+
+function isOffTypeStatus(status) {
+  return getStatusParts(status).every((part) => part.startsWith('off'))
 }
 
 function parseAiCommand(input, defaultYear = 2026) {
@@ -286,39 +346,6 @@ async function saveOneOverride(dateStr, member, status) {
   }
 }
 
-async function saveRangeOverride(member, startDateStr, endDateStr, status) {
-  const start = new Date(`${startDateStr}T00:00:00`)
-  const end = new Date(`${endDateStr}T00:00:00`)
-  const cursor = new Date(start)
-
-  while (cursor <= end) {
-    const dateStr = formatDate(cursor)
-    await saveOneOverride(dateStr, member, status)
-    cursor.setDate(cursor.getDate() + 1)
-  }
-}
-
-
-async function saveTemporalRuleOverride(member, status, temporalRule) {
-  if (temporalRule.type === 'date-range') {
-    await saveRangeOverride(member, temporalRule.startDateStr, temporalRule.endDateStr, status)
-    return
-  }
-
-  if (temporalRule.type === 'weekly') {
-    const start = new Date(`${temporalRule.startDateStr}T00:00:00`)
-    const end = new Date(`${temporalRule.endDateStr}T00:00:00`)
-    const cursor = new Date(start)
-
-    while (cursor <= end) {
-      if (cursor.getDay() === temporalRule.weekday) {
-        await saveOneOverride(formatDate(cursor), member, status)
-      }
-      cursor.setDate(cursor.getDate() + 1)
-    }
-  }
-}
-
 export default function App() {
   const uiYear = 2026
   const todayStr = formatDate(new Date())
@@ -370,11 +397,14 @@ export default function App() {
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
   const updateMemberStatus = async (member, nextStatus) => {
+    const currentStatus = getStatusForDate(selectedDate, member)
+    const finalStatus = resolveNextStatus(currentStatus, nextStatus)
+
     try {
-      await saveOneOverride(selectedDate, member, nextStatus)
+      await saveOneOverride(selectedDate, member, finalStatus)
       const nextOverrides = await fetchOverridesFromSupabase()
       setOverrides(nextOverrides)
-      setAiFeedback(`${member} 在 ${selectedDate} 已更新为 ${statusMap[nextStatus].label}`)
+      setAiFeedback(`${member} 在 ${selectedDate} 已更新为 ${getStatusMeta(finalStatus).label}`)
     } catch (error) {
       console.error('Failed to update member status', error)
       setAiFeedback('保存失败，请稍后重试。')
@@ -407,8 +437,30 @@ export default function App() {
 
     try {
       for (const action of parsed.actions) {
-        for (const member of action.members) {
-          await saveTemporalRuleOverride(member, action.status, action.temporalRule)
+        const start = new Date(`${action.temporalRule.startDateStr}T00:00:00`)
+        const end = new Date(`${action.temporalRule.endDateStr}T00:00:00`)
+        const cursor = new Date(start)
+
+        while (cursor <= end) {
+          if (action.temporalRule.type !== 'weekly' || cursor.getDay() === action.temporalRule.weekday) {
+            const dateStr = formatDate(cursor)
+            for (const member of action.members) {
+              const currentStatus = getStatusForDate(dateStr, member)
+              const defaultStatus = getDefaultStatus(dateStr)
+              const aiBlockedByHolidayRule =
+                defaultStatus === 'off' &&
+                isOffTypeStatus(currentStatus) &&
+                !isOffTypeStatus(action.status)
+
+              if (aiBlockedByHolidayRule) {
+                continue
+              }
+
+              const finalStatus = resolveNextStatus(currentStatus, action.status)
+              await saveOneOverride(dateStr, member, finalStatus)
+            }
+          }
+          cursor.setDate(cursor.getDate() + 1)
         }
       }
 
@@ -418,7 +470,7 @@ export default function App() {
       setSelectedDate(firstAction.temporalRule.startDateStr)
       setSelectedMember(firstAction.members[0])
       setSelectedMonth(Number(firstAction.temporalRule.startDateStr.slice(5, 7)) - 1)
-      setAiFeedback(`已更新：${parsed.actions.map((item) => item.summary).join('；')}`)
+      setAiFeedback(`已更新：${parsed.actions.map((item) => item.summary).join('；')}（节假日默认休假不会被 AI 改成非休假状态）`)
     } catch (error) {
       console.error('Failed to apply AI command', error)
       setAiFeedback('AI 更新失败，请稍后重试。')
@@ -541,7 +593,7 @@ export default function App() {
                         </div>
                         <div className="cell-bottom">
                           <div className="daytype-text">{dayType.label}</div>
-                          <div className={`status-badge ${statusMap[status].className}`}>{statusMap[status].shortLabel}</div>
+                          <div className={`status-badge ${getStatusMeta(status).className}`}>{getStatusMeta(status).shortLabel}</div>
                         </div>
                       </button>
                     )
@@ -571,7 +623,7 @@ export default function App() {
                         <button className={`member-name ${isActive ? 'member-name-active' : ''}`} onClick={() => setSelectedMember(member)}>
                           {member}
                         </button>
-                        <div className={`status-badge ${statusMap[current].className}`}>{statusMap[current].label}</div>
+                        <div className={`status-badge ${getStatusMeta(current).className}`}>{getStatusMeta(current).label}</div>
                       </div>
 
                       <div className="status-grid">
