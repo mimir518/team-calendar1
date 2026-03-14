@@ -361,14 +361,29 @@ async function saveOverrides(entries) {
     upsertRows.push({ person_name: member, event_date: dateStr, status })
   }
 
-  for (const [member, dateList] of deleteDatesByMember.entries()) {
-    const { error: deleteError } = await supabase
-      .from('calendar_events')
-      .delete()
-      .eq('person_name', member)
-      .in('event_date', [...new Set(dateList)])
+  const deleteTasks = []
+  const DELETE_CHUNK_SIZE = 80
 
-    if (deleteError) throw deleteError
+  for (const [member, dateList] of deleteDatesByMember.entries()) {
+    const uniqueDates = [...new Set(dateList)]
+
+    for (let i = 0; i < uniqueDates.length; i += DELETE_CHUNK_SIZE) {
+      const dateChunk = uniqueDates.slice(i, i + DELETE_CHUNK_SIZE)
+      deleteTasks.push(
+        supabase
+          .from('calendar_events')
+          .delete()
+          .eq('person_name', member)
+          .in('event_date', dateChunk),
+      )
+    }
+  }
+
+  if (deleteTasks.length) {
+    const deleteResults = await Promise.all(deleteTasks)
+    for (const result of deleteResults) {
+      if (result.error) throw result.error
+    }
   }
 
   if (upsertRows.length) {
@@ -564,6 +579,22 @@ export default function App() {
     return next
   }
 
+  const putStatusToMutableMap = (dateStr, member, status, targetMap) => {
+    const dayMap = targetMap[dateStr] || {}
+    const defaultStatus = getDefaultStatus(dateStr)
+
+    if (status === defaultStatus) {
+      if (!Object.prototype.hasOwnProperty.call(dayMap, member)) return
+      delete dayMap[member]
+      if (Object.keys(dayMap).length) targetMap[dateStr] = dayMap
+      else delete targetMap[dateStr]
+      return
+    }
+
+    dayMap[member] = status
+    targetMap[dateStr] = dayMap
+  }
+
   const getFinalStatusBySource = (currentStatus, requestedStatus, dateStr, source) => {
     if (source === 'ai' && getDayType(dateStr).type === 'holiday' && currentStatus === 'off' && !isOffStatus(requestedStatus)) {
       return 'off'
@@ -635,7 +666,9 @@ export default function App() {
     }
 
     try {
-      let draftOverrides = { ...overrides }
+      const draftOverrides = Object.fromEntries(
+        Object.entries(overrides).map(([dateStr, dayMap]) => [dateStr, { ...dayMap }]),
+      )
       const pendingWrites = []
 
       for (const action of parsed.actions) {
@@ -648,7 +681,7 @@ export default function App() {
             if (finalStatus === currentStatus) continue
 
             pendingWrites.push({ dateStr, member, status: finalStatus })
-            draftOverrides = putStatusToMap(dateStr, member, finalStatus, draftOverrides)
+            putStatusToMutableMap(dateStr, member, finalStatus, draftOverrides)
           }
         }
       }
