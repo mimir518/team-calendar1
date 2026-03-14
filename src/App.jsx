@@ -435,7 +435,7 @@ export default function App() {
               <table className="week-table">
                 <thead>
                   <tr>
-                    <th>成员</th>
+                    <th className="member-head">成员</th>
                     {weekDates.map((date, idx) => {
                       const dateStr = formatDate(date)
                       const dayType = getDayType(dateStr)
