@@ -341,21 +341,25 @@ async function fetchOverridesFromSupabase() {
 async function saveOneOverride(dateStr, member, status) {
   const defaultStatus = getDefaultStatus(dateStr)
 
-  const { error: deleteError } = await supabase
-    .from('calendar_events')
-    .delete()
-    .eq('event_date', dateStr)
-    .eq('person_name', member)
-
-  if (deleteError) throw deleteError
-
-  if (status !== defaultStatus) {
-    const { error: insertError } = await supabase
+  if (status === defaultStatus) {
+    const { error: deleteError } = await supabase
       .from('calendar_events')
-      .insert([{ person_name: member, event_date: dateStr, status }])
+      .delete()
+      .eq('event_date', dateStr)
+      .eq('person_name', member)
 
-    if (insertError) throw insertError
+    if (deleteError) throw deleteError
+    return
   }
+
+  const person_name = member
+  const event_date = dateStr
+
+  const { error: upsertError } = await supabase
+    .from('calendar_events')
+    .upsert([{ person_name, event_date, status }], { onConflict: 'person_name,event_date' })
+
+  if (upsertError) throw upsertError
 }
 
 async function saveRangeOverride(member, startDateStr, endDateStr, status) {
