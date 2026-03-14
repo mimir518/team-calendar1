@@ -339,55 +339,72 @@ async function fetchOverridesFromSupabase() {
 }
 
 async function saveOneOverride(dateStr, member, status) {
-  const defaultStatus = getDefaultStatus(dateStr)
-
-  const { error: deleteError } = await supabase
-    .from('calendar_events')
-    .delete()
-    .eq('event_date', dateStr)
-    .eq('person_name', member)
-
-  if (deleteError) throw deleteError
-
-  if (status !== defaultStatus) {
-    const { error: insertError } = await supabase
-      .from('calendar_events')
-      .insert([{ person_name: member, event_date: dateStr, status }])
-
-    if (insertError) throw insertError
-  }
+  await saveOverridesBatch([{ person_name: member, event_date: dateStr, status }])
 }
 
-async function saveRangeOverride(member, startDateStr, endDateStr, status) {
-  const start = new Date(`${startDateStr}T00:00:00`)
-  const end = new Date(`${endDateStr}T00:00:00`)
-  const cursor = new Date(start)
+function chunkArray(items, batchSize = 200) {
+  const chunks = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    chunks.push(items.slice(i, i + batchSize))
+  }
+  return chunks
+}
 
-  while (cursor <= end) {
-    const dateStr = formatDate(cursor)
-    await saveOneOverride(dateStr, member, status)
-    cursor.setDate(cursor.getDate() + 1)
+async function saveOverridesBatch(overrides) {
+  const dedupedMap = new Map()
+
+  for (const item of overrides || []) {
+    if (!item?.person_name || !item?.event_date || !item?.status) continue
+    dedupedMap.set(`${item.person_name}@@${item.event_date}`, item)
+  }
+
+  const dedupedRows = [...dedupedMap.values()]
+  if (!dedupedRows.length) return
+
+  const rowsToDelete = []
+  const rowsToUpsert = []
+
+  for (const row of dedupedRows) {
+    const defaultStatus = getDefaultStatus(row.event_date)
+    if (row.status === defaultStatus) rowsToDelete.push(row)
+    else rowsToUpsert.push(row)
+  }
+
+  const deleteDateMapByMember = new Map()
+  for (const row of rowsToDelete) {
+    if (!deleteDateMapByMember.has(row.person_name)) {
+      deleteDateMapByMember.set(row.person_name, new Set())
+    }
+    deleteDateMapByMember.get(row.person_name).add(row.event_date)
+  }
+
+  for (const [member, dateSet] of deleteDateMapByMember.entries()) {
+    const dateChunks = chunkArray([...dateSet], 200)
+    for (const dateChunk of dateChunks) {
+      const { error } = await supabase
+        .from('calendar_events')
+        .delete()
+        .eq('person_name', member)
+        .in('event_date', dateChunk)
+
+      if (error) throw error
+    }
+  }
+
+  const upsertChunks = chunkArray(rowsToUpsert, 200)
+  for (const chunk of upsertChunks) {
+    const { error } = await supabase
+      .from('calendar_events')
+      .upsert(chunk, { onConflict: 'person_name,event_date' })
+
+    if (error) throw error
   }
 }
 
 async function saveTemporalRuleOverride(member, status, temporalRule) {
-  if (temporalRule.type === 'date-range') {
-    await saveRangeOverride(member, temporalRule.startDateStr, temporalRule.endDateStr, status)
-    return
-  }
-
-  if (temporalRule.type === 'weekly') {
-    const start = new Date(`${temporalRule.startDateStr}T00:00:00`)
-    const end = new Date(`${temporalRule.endDateStr}T00:00:00`)
-    const cursor = new Date(start)
-
-    while (cursor <= end) {
-      if (cursor.getDay() === temporalRule.weekday) {
-        await saveOneOverride(formatDate(cursor), member, status)
-      }
-      cursor.setDate(cursor.getDate() + 1)
-    }
-  }
+  const dateList = getDateStringsFromTemporalRule(temporalRule)
+  const rows = dateList.map((dateStr) => ({ person_name: member, event_date: dateStr, status }))
+  await saveOverridesBatch(rows)
 }
 
 function getDateStringsFromTemporalRule(temporalRule) {
@@ -603,17 +620,25 @@ export default function App() {
 
     try {
       let draftOverrides = { ...overrides }
+      const aiTargetMap = new Map()
+
       for (const action of parsed.actions) {
+        const dateList = getDateStringsFromTemporalRule(action.temporalRule)
         for (const member of action.members) {
-          const dateList = getDateStringsFromTemporalRule(action.temporalRule)
           for (const dateStr of dateList) {
             const currentStatus = getStatusFromMap(dateStr, member, draftOverrides)
             const finalStatus = getFinalStatusBySource(currentStatus, action.status, dateStr, 'ai')
-            await saveOneOverride(dateStr, member, finalStatus)
+            aiTargetMap.set(`${member}@@${dateStr}`, {
+              person_name: member,
+              event_date: dateStr,
+              status: finalStatus,
+            })
             draftOverrides = putStatusToMap(dateStr, member, finalStatus, draftOverrides)
           }
         }
       }
+
+      await saveOverridesBatch([...aiTargetMap.values()])
 
       setOverrides(draftOverrides)
       scheduleSilentRefresh()
