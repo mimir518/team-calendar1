@@ -79,6 +79,7 @@ h2 { margin: 0; font-size: 22px; }
 .ai-inline-row {
   align-items: center;
   padding-right: 48px;
+  flex-wrap: nowrap;
 }
 .ai-inline-row h2 {
   font-size: 18px;
@@ -204,7 +205,7 @@ h2 { margin: 0; font-size: 22px; }
   cursor: pointer;
 }
 .week-nav-today {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 .weekdays-strip {
@@ -318,6 +319,20 @@ h2 { margin: 0; font-size: 22px; }
     min-width: 790px;
   }
   .week-table { min-width: 790px; }
+
+  .ai-inline-row {
+    gap: 8px;
+  }
+  .ai-inline-row h2 {
+    font-size: 16px;
+  }
+  .text-input {
+    min-width: 110px;
+    padding: 9px 10px;
+  }
+  .primary-btn {
+    padding: 9px 12px;
+  }
 }
 
 

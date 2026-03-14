@@ -502,7 +502,7 @@ export default function App() {
 
         <div className="card section-card">
           <div className="ai-box">
-            <div className="row wrap gap-12 ai-inline-row">
+            <div className="row gap-12 ai-inline-row">
               <h2>AI 快速录入</h2>
               <div className="menu-wrap">
                 <button
