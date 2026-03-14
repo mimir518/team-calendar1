@@ -13,7 +13,7 @@ const statusOptions = [
   { value: 'business', label: '出差', shortLabel: '出差', className: 'status-business' },
 ]
 const statusMap = Object.fromEntries(statusOptions.map((s) => [s.value, s]))
-const weekdayNames = ['一', '二', '三', '四', '五', '六', '日']
+const weekdayNames = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
 
 const holidayMapByYear = {
   2026: {
@@ -181,6 +181,10 @@ function getWeekDates(baseDate) {
   })
 }
 
+function getDaysInMonth(year, month) {
+  return new Date(year, month, 0).getDate()
+}
+
 async function fetchOverridesFromSupabase() {
   const { data, error } = await supabase
     .from('calendar_events')
@@ -236,6 +240,11 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [yearPickerOpen, setYearPickerOpen] = useState(false)
 
+  const thisWeekMonday = useMemo(() => getWeekDates(today)[0], [todayStr])
+  const [weekAnchorDate, setWeekAnchorDate] = useState(thisWeekMonday)
+  const [jumpMonth, setJumpMonth] = useState(thisWeekMonday.getMonth() + 1)
+  const [jumpDay, setJumpDay] = useState(thisWeekMonday.getDate())
+
   const yearOptions = useMemo(() => {
     return Array.from({ length: 6 }, (_, idx) => currentYear - 1 + idx)
   }, [currentYear])
@@ -257,11 +266,27 @@ export default function App() {
   }, [])
 
   const weekDates = useMemo(() => {
-    const targetDate = new Date(today)
-    targetDate.setFullYear(selectedYear)
+    const targetDate = new Date(weekAnchorDate)
     targetDate.setDate(targetDate.getDate() + weekOffset * 7)
     return getWeekDates(targetDate)
-  }, [todayStr, selectedYear, weekOffset])
+  }, [weekAnchorDate, weekOffset])
+
+  const dayOptions = useMemo(() => {
+    const daysInMonth = getDaysInMonth(selectedYear, jumpMonth)
+    return Array.from({ length: daysInMonth }, (_, idx) => idx + 1)
+  }, [selectedYear, jumpMonth])
+
+  useEffect(() => {
+    if (!dayOptions.includes(jumpDay)) {
+      setJumpDay(dayOptions[dayOptions.length - 1])
+    }
+  }, [dayOptions, jumpDay])
+
+  useEffect(() => {
+    const targetDate = new Date(selectedYear, jumpMonth - 1, jumpDay)
+    setWeekAnchorDate(targetDate)
+    setWeekOffset(0)
+  }, [selectedYear, jumpMonth, jumpDay])
 
   const getStatusForDate = (dateStr, member) => overrides[dateStr]?.[member] || getDefaultStatus(dateStr)
 
@@ -378,9 +403,29 @@ export default function App() {
           <div className="row between wrap gap-12 section-head">
             <div>
               <h2>Weekly Schedule</h2>
-              <p className="subtle">每行是组员，每列是选定周的周一到周日，点击单元格即可下拉修改状态。</p>
+              <p className="subtle">点击单元格即可下拉修改状态。</p>
             </div>
             <div className="week-nav-cards">
+              <div className="week-jump-card">
+                <select
+                  className="week-jump-select"
+                  value={jumpMonth}
+                  onChange={(e) => setJumpMonth(Number(e.target.value))}
+                >
+                  {Array.from({ length: 12 }, (_, idx) => idx + 1).map((month) => (
+                    <option key={month} value={month}>{`${month}月`}</option>
+                  ))}
+                </select>
+                <select
+                  className="week-jump-select"
+                  value={jumpDay}
+                  onChange={(e) => setJumpDay(Number(e.target.value))}
+                >
+                  {dayOptions.map((day) => (
+                    <option key={day} value={day}>{`${day}日`}</option>
+                  ))}
+                </select>
+              </div>
               <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev - 1)}>{'<'}</button>
               <button className="week-nav-card" onClick={() => setWeekOffset((prev) => prev + 1)}>{'>'}</button>
             </div>
@@ -393,7 +438,7 @@ export default function App() {
               <div className="weekdays-strip">
                 <div className="weekday-member-placeholder" />
                 {weekDates.map((date, idx) => (
-                  <div key={`weekday-${formatDate(date)}`} className="weekday-label">{`周${weekdayNames[idx]}`}</div>
+                  <div key={`weekday-${formatDate(date)}`} className="weekday-label">{weekdayNames[idx]}</div>
                 ))}
               </div>
               <table className="week-table">
