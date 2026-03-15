@@ -303,9 +303,11 @@ function parseAiCommand(input, defaultYear = 2026) {
     .filter(Boolean)
 
   const actions = []
+  let lastMentionedMembers = []
 
   for (const clause of clauses) {
-    const membersInClause = extractMembersFromText(clause.replace(/(和|、|,|and)/gi, ' '))
+    const explicitMembers = extractMembersFromText(clause.replace(/(和|、|,|and)/gi, ' '))
+    const membersInClause = explicitMembers.length ? explicitMembers : lastMentionedMembers
     if (!membersInClause.length) continue
 
     const status = parseStatusFromText(clause)
@@ -324,6 +326,10 @@ function parseAiCommand(input, defaultYear = 2026) {
       temporalRule: temporalResult.temporalRule,
       summary: `${membersInClause.join('、')} ${temporalResult.summary} 改为${statusMap[status].label}`,
     })
+
+    if (explicitMembers.length) {
+      lastMentionedMembers = explicitMembers
+    }
   }
 
   if (!actions.length) {
