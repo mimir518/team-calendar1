@@ -173,6 +173,17 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+function parseQuarterFromText(text) {
+  const qStyleMatch = text.match(/\bQ\s*([1-4])\b/i)
+  if (qStyleMatch) return Number(qStyleMatch[1])
+
+  const quarterMatch = text.match(/第?\s*([一二三四1234])\s*季度?/)
+  if (!quarterMatch) return null
+
+  const quarterValueMap = { 一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4 }
+  return quarterValueMap[quarterMatch[1]] || null
+}
+
 function getQuarterDateRange(quarter, year = 2026) {
   const quarterMap = {
     1: { startDateStr: `${year}-01-01`, endDateStr: `${year}-03-31` },
@@ -240,10 +251,7 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
     }
   }
 
-  const quarterMatch = text.match(/第?([一二三四1234])季度/)
-  const quarterToken = quarterMatch?.[1] || fallbackQuarter
-  const quarterValueMap = { 一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4 }
-  const quarter = quarterToken ? quarterValueMap[quarterToken] : null
+  const quarter = parseQuarterFromText(text) || fallbackQuarter || null
 
   const monthMatch = text.match(/(\d{1,2})月(?:份)?/)
   const month = monthMatch ? Number(monthMatch[1]) : null
@@ -285,8 +293,7 @@ function parseAiCommand(input, defaultYear = 2026) {
   const text = input.trim()
   if (!text) return { ok: false, message: '请输入一句指令。' }
 
-  const quarterMatch = text.match(/第?([一二三四1234])季度/)
-  const fallbackQuarter = quarterMatch?.[1]
+  const fallbackQuarter = parseQuarterFromText(text)
   const memberPattern = members.map(escapeRegExp).join('|')
 
   const clauses = text
