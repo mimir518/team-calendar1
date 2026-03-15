@@ -815,7 +815,7 @@ export default function App() {
               <input
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
-                placeholder="例如：Mary 4月8号HO上午"
+                placeholder="例如：Mary和Doris Q1每周二HO"
                 className="text-input"
               />
               <button onClick={applyAiCommand} className="primary-btn">更新</button>
