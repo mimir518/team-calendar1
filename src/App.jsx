@@ -160,6 +160,15 @@ function normalizeChineseDate(month, day, year) {
   return `${year}-${pad(Number(month))}-${pad(Number(day))}`
 }
 
+function getMonthDateRange(month, year = 2026) {
+  const normalizedMonth = Number(month)
+  if (!normalizedMonth || normalizedMonth < 1 || normalizedMonth > 12) return null
+
+  const startDateStr = `${year}-${pad(normalizedMonth)}-01`
+  const endDateStr = `${year}-${pad(normalizedMonth)}-${pad(getDaysInMonth(year, normalizedMonth))}`
+  return { startDateStr, endDateStr }
+}
+
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -236,13 +245,26 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
   const quarterValueMap = { 一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4 }
   const quarter = quarterToken ? quarterValueMap[quarterToken] : null
 
+  const monthMatch = text.match(/(\d{1,2})月(?:份)?/)
+  const month = monthMatch ? Number(monthMatch[1]) : null
+
   const weekdayMatch = text.match(/每周([一二三四五六日天])/)
   if (weekdayMatch) {
     const weekdayMap = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
     const weekday = weekdayMap[weekdayMatch[1]]
-    const range = quarter
-      ? getQuarterDateRange(quarter, defaultYear)
-      : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
+    const range = month
+      ? getMonthDateRange(month, defaultYear)
+      : quarter
+        ? getQuarterDateRange(quarter, defaultYear)
+        : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
+
+    if (!range) return null
+
+    const periodLabel = month
+      ? `${month}月`
+      : quarter
+        ? `第${quarter}季度`
+        : '全年'
 
     return {
       temporalRule: {
@@ -250,8 +272,9 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
         weekday,
         ...range,
         quarter,
+        month,
       },
-      summary: `${quarter ? `第${quarter}季度` : '全年'}每周${weekdayMatch[1]}`,
+      summary: `${periodLabel}每周${weekdayMatch[1]}`,
     }
   }
 
