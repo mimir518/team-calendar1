@@ -31,15 +31,20 @@ const holidayMapByYear = {
     '2026-02-21': '春节',
     '2026-02-22': '春节',
     '2026-02-23': '春节',
+    '2026-04-04': '清明节',
     '2026-04-05': '清明节',
     '2026-04-06': '清明节',
     '2026-05-01': '劳动节',
     '2026-05-02': '劳动节',
     '2026-05-03': '劳动节',
-    '2026-05-31': '端午节',
-    '2026-06-01': '端午节',
+    '2026-05-04': '劳动节',
+    '2026-05-05': '劳动节',
+    '2026-06-19': '端午节',
+    '2026-06-20': '端午节',
+    '2026-06-21': '端午节',
     '2026-09-25': '中秋节',
     '2026-09-26': '中秋节',
+    '2026-09-27': '中秋节',
     '2026-10-01': '国庆节',
     '2026-10-02': '国庆节',
     '2026-10-03': '国庆节',
@@ -47,17 +52,16 @@ const holidayMapByYear = {
     '2026-10-05': '国庆节',
     '2026-10-06': '国庆节',
     '2026-10-07': '国庆节',
-    '2026-10-08': '国庆节',
   },
 }
 
 const makeupWorkdaysByYear = {
   2026: new Set([
+    '2026-01-04',
     '2026-02-14',
     '2026-02-28',
-    '2026-04-04',
-    '2026-05-30',
-    '2026-09-27',
+    '2026-05-09',
+    '2026-09-20',
     '2026-10-10',
   ]),
 }
@@ -160,8 +164,28 @@ function normalizeChineseDate(month, day, year) {
   return `${year}-${pad(Number(month))}-${pad(Number(day))}`
 }
 
+function getMonthDateRange(month, year = 2026) {
+  const normalizedMonth = Number(month)
+  if (!normalizedMonth || normalizedMonth < 1 || normalizedMonth > 12) return null
+
+  const startDateStr = `${year}-${pad(normalizedMonth)}-01`
+  const endDateStr = `${year}-${pad(normalizedMonth)}-${pad(getDaysInMonth(year, normalizedMonth))}`
+  return { startDateStr, endDateStr }
+}
+
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function parseQuarterFromText(text) {
+  const qStyleMatch = text.match(/\bQ\s*([1-4])\b/i)
+  if (qStyleMatch) return Number(qStyleMatch[1])
+
+  const quarterMatch = text.match(/第?\s*([一二三四1234])\s*季度?/)
+  if (!quarterMatch) return null
+
+  const quarterValueMap = { 一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4 }
+  return quarterValueMap[quarterMatch[1]] || null
 }
 
 function getQuarterDateRange(quarter, year = 2026) {
@@ -231,18 +255,28 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
     }
   }
 
-  const quarterMatch = text.match(/第?([一二三四1234])季度/)
-  const quarterToken = quarterMatch?.[1] || fallbackQuarter
-  const quarterValueMap = { 一: 1, 二: 2, 三: 3, 四: 4, '1': 1, '2': 2, '3': 3, '4': 4 }
-  const quarter = quarterToken ? quarterValueMap[quarterToken] : null
+  const quarter = parseQuarterFromText(text) || fallbackQuarter || null
+
+  const monthMatch = text.match(/(\d{1,2})月(?:份)?/)
+  const month = monthMatch ? Number(monthMatch[1]) : null
 
   const weekdayMatch = text.match(/每周([一二三四五六日天])/)
   if (weekdayMatch) {
     const weekdayMap = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
     const weekday = weekdayMap[weekdayMatch[1]]
-    const range = quarter
-      ? getQuarterDateRange(quarter, defaultYear)
-      : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
+    const range = month
+      ? getMonthDateRange(month, defaultYear)
+      : quarter
+        ? getQuarterDateRange(quarter, defaultYear)
+        : { startDateStr: `${defaultYear}-01-01`, endDateStr: `${defaultYear}-12-31` }
+
+    if (!range) return null
+
+    const periodLabel = month
+      ? `${month}月`
+      : quarter
+        ? `第${quarter}季度`
+        : '全年'
 
     return {
       temporalRule: {
@@ -250,8 +284,9 @@ function parseTemporalRuleFromText(text, fallbackQuarter, defaultYear = 2026) {
         weekday,
         ...range,
         quarter,
+        month,
       },
-      summary: `${quarter ? `第${quarter}季度` : '全年'}每周${weekdayMatch[1]}`,
+      summary: `${periodLabel}每周${weekdayMatch[1]}`,
     }
   }
 
@@ -262,8 +297,7 @@ function parseAiCommand(input, defaultYear = 2026) {
   const text = input.trim()
   if (!text) return { ok: false, message: '请输入一句指令。' }
 
-  const quarterMatch = text.match(/第?([一二三四1234])季度/)
-  const fallbackQuarter = quarterMatch?.[1]
+  const fallbackQuarter = parseQuarterFromText(text)
   const memberPattern = members.map(escapeRegExp).join('|')
 
   const clauses = text
@@ -273,9 +307,11 @@ function parseAiCommand(input, defaultYear = 2026) {
     .filter(Boolean)
 
   const actions = []
+  let lastMentionedMembers = []
 
   for (const clause of clauses) {
-    const membersInClause = extractMembersFromText(clause.replace(/(和|、|,|and)/gi, ' '))
+    const explicitMembers = extractMembersFromText(clause.replace(/(和|、|,|and)/gi, ' '))
+    const membersInClause = explicitMembers.length ? explicitMembers : lastMentionedMembers
     if (!membersInClause.length) continue
 
     const status = parseStatusFromText(clause)
@@ -294,6 +330,10 @@ function parseAiCommand(input, defaultYear = 2026) {
       temporalRule: temporalResult.temporalRule,
       summary: `${membersInClause.join('、')} ${temporalResult.summary} 改为${statusMap[status].label}`,
     })
+
+    if (explicitMembers.length) {
+      lastMentionedMembers = explicitMembers
+    }
   }
 
   if (!actions.length) {
@@ -785,7 +825,7 @@ export default function App() {
               <input
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
-                placeholder="例如：Mary 4月8号HO上午"
+                placeholder="例如：Mary和Doris Q1每周二HO"
                 className="text-input"
               />
               <button onClick={applyAiCommand} className="primary-btn">更新</button>
